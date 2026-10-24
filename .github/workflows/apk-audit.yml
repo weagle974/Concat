@@ -1,0 +1,58 @@
+name: APK audit
+
+# Reads, never runs, the Android APK a "Build for phones" run produced, and
+# commits a Markdown report to this branch (audit-apk/REPORT.md).
+#
+# Runs when this branch is pushed, or by hand with a run id. It lives on the
+# apk-audit branch only: main is untouched and no phone build is started.
+on:
+  push:
+    branches: [apk-audit]
+    paths:
+      - ".github/workflows/apk-audit.yml"
+      - ".github/scripts/audit_apk.py"
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: The "Build for phones" run whose Concat-android-arm64 artifact to audit
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  DEFAULT_RUN_ID: "39916287243"
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download the APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id || env.DEFAULT_RUN_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/apk_dl
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name Concat-android-arm64 --dir /tmp/apk_dl
+          find /tmp/apk_dl -type f | sort
+      - name: Audit
+        run: |
+          set -euo pipefail
+          apk=$(find /tmp/apk_dl -name '*.apk' | head -1)
+          [ -n "$apk" ] || { echo "no APK in the artifact"; exit 1; }
+          mkdir -p audit-apk
+          python3 .github/scripts/audit_apk.py "$apk" src/Cargo.lock audit-apk/REPORT.md
+          wc -c audit-apk/REPORT.md
+      - name: Commit the report to this branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audit-apk/REPORT.md
+          git commit -m "APK audit report [skip ci]" || { echo "nothing to commit"; exit 0; }
+          git push origin "HEAD:${GITHUB_REF_NAME}"

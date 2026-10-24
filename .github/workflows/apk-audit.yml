@@ -8,9 +8,6 @@ name: APK audit
 on:
   push:
     branches: [apk-audit]
-    paths:
-      - ".github/workflows/apk-audit.yml"
-      - ".github/scripts/audit_apk.py"
   workflow_dispatch:
     inputs:
       run_id:

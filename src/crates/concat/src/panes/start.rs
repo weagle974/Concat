@@ -411,8 +411,21 @@ impl StartPane {
             self.error = t("start.chooseWhereProjectFolder");
             return;
         }
-        let opened = projects::create(&self.location, &name, width, height, num, den, self.canvas)
-            .and_then(|info| studio.open_project(info));
+        // A project removed from the list is still in its folder, so a new
+        // one of the same name goes in the next free folder and keeps the
+        // name that was typed.
+        let folder = projects::free_folder(Path::new(&self.location), &name);
+        let opened = projects::create_in(
+            &self.location,
+            &folder,
+            &name,
+            width,
+            height,
+            num,
+            den,
+            self.canvas,
+        )
+        .and_then(|info| studio.open_project(info));
         self.busy = false;
         match opened {
             Ok(()) => {

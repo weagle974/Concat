@@ -129,6 +129,26 @@ fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
+/// The folder, inside `location`, a new project called `name` should go in:
+/// the name's own folder when no project is there, else the first of
+/// "name 2", "name 3", ... with no project in it.
+///
+/// "Remove from list" forgets a project and leaves its folder where it was,
+/// so a person who removes a project and then makes another of the same name
+/// finds that folder still holding the old project. The old one is not
+/// overwritten - see [`create`] - and the new one is not refused either: it
+/// keeps the name that was typed and takes the next free folder.
+pub fn free_folder(location: &Path, name: &str) -> String {
+    let base = folder_name(name);
+    if !is_project(&location.join(&base)) {
+        return base;
+    }
+    (2..)
+        .map(|number| format!("{base} {number}"))
+        .find(|folder| !is_project(&location.join(folder)))
+        .expect("the numbers do not run out")
+}
+
 /// Creates the project folder and writes its manifest.
 ///
 /// Refuses to touch a folder that already holds a manifest. Overwriting
@@ -142,7 +162,32 @@ pub fn create(
     rate_den: i64,
     canvas: [u8; 4],
 ) -> Result<ProjectInfo, String> {
-    let root = Path::new(location).join(folder_name(name));
+    create_in(
+        location,
+        &folder_name(name),
+        name,
+        width,
+        height,
+        rate_num,
+        rate_den,
+        canvas,
+    )
+}
+
+/// [`create`] in a folder of the caller's choosing, called `folder` inside
+/// `location`, for the project named `name`; see [`free_folder`].
+#[allow(clippy::too_many_arguments)]
+pub fn create_in(
+    location: &str,
+    folder: &str,
+    name: &str,
+    width: u32,
+    height: u32,
+    rate_num: i64,
+    rate_den: i64,
+    canvas: [u8; 4],
+) -> Result<ProjectInfo, String> {
+    let root = Path::new(location).join(folder);
     let manifest = root.join(MANIFEST);
 
     // Any name counts as an existing project - a legacy folder must be
@@ -684,6 +729,39 @@ mod tests {
         let read: Vec<ProjectInfo> = serde_json::from_str(&list).expect("reads");
         assert_eq!(read[0].canvas, [0, 177, 64, 255]);
         assert_eq!(read[1].canvas, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn a_name_whose_folder_still_holds_a_project_takes_the_next_free_folder() {
+        let scratch = std::env::temp_dir().join(format!("concat-free-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&scratch);
+        std::fs::create_dir_all(&scratch).expect("scratch folder");
+        let location = scratch.to_string_lossy().into_owned();
+
+        // Nothing there yet: the name's own folder.
+        assert_eq!(free_folder(&scratch, "Trip"), "Trip");
+
+        // A project there, removed from the list but not from the disk: the
+        // next project of that name goes beside it, keeping the name.
+        let first = create(&location, "Trip", 1920, 1080, 30, 1, [0, 0, 0, 255]).expect("first");
+        assert!(first.path.ends_with("Trip"));
+        assert_eq!(free_folder(&scratch, "Trip"), "Trip 2");
+        let folder = free_folder(&scratch, "Trip");
+        let second = create_in(&location, &folder, "Trip", 1920, 1080, 30, 1, [0, 0, 0, 255])
+            .expect("second");
+        assert_eq!(second.name, "Trip");
+        assert!(second.path.ends_with("Trip 2"));
+        assert_eq!(free_folder(&scratch, "Trip"), "Trip 3");
+
+        // The first is untouched, and `create` itself still refuses it.
+        assert!(is_project(&scratch.join("Trip")));
+        assert!(create(&location, "Trip", 1920, 1080, 30, 1, [0, 0, 0, 255]).is_err());
+
+        // A folder with no project in it is not in the way.
+        std::fs::create_dir_all(scratch.join("Empty")).expect("empty folder");
+        assert_eq!(free_folder(&scratch, "Empty"), "Empty");
+
+        let _ = std::fs::remove_dir_all(&scratch);
     }
 
     #[test]

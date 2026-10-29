@@ -162,9 +162,20 @@ if main_lib_data:
     h("Keywords in libconcat_android.so (case-insensitive counts)")
     lines = []
     for k in KEYWORDS:
-        n = len(re.findall(re.escape(k.encode()), main_lib_data, flags=re.I))
-        if n:
-            lines.append(f"{k}: {n}")
+        hits = list(re.finditer(re.escape(k.encode()), main_lib_data, flags=re.I))
+        if hits:
+            lines.append(f"{k}: {len(hits)}")
+            # Where each word sits, so an ordinary word ("exposed", a C++
+            # iostream "sentry", work-"stealer") can be told from a real hit.
+            seen = set()
+            for m in hits:
+                a, b = max(0, m.start() - 50), min(len(main_lib_data), m.end() + 50)
+                seg = re.sub(rb"[^\x20-\x7e]", b".", main_lib_data[a:b]).decode()
+                if seg not in seen:
+                    seen.add(seg)
+                    lines.append(f"    ...{seg}...")
+                if len(seen) >= 3:
+                    break
     code("\n".join(lines) or "none of the listed keywords")
 
     h("Rust crates embedded in libconcat_android.so vs Cargo.lock")

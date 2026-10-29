@@ -2350,6 +2350,8 @@ impl Studio {
     /// read off disk.
     pub fn new(host: Host) -> Self {
         let prefs = Preferences::load(&host.dirs);
+        // Before anything can ask the network for anything.
+        concat_host::net::set_internet(prefs.internet);
         let mut start = crate::panes::start::StartPane::default();
         if let Some(location) = prefs.project_location() {
             start.location = location.to_owned();

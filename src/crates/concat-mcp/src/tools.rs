@@ -36,14 +36,15 @@ const WAIT_LONGEST: f64 = 600.0;
 const STAGES: usize = 5;
 
 /// Where a stage comes in an export, from 0. A job's status names the
-/// stage the exporter reports - "rendering", "mixing audio", "muxing" -
-/// and the API's documentation names them "video", "audio" and "mux"; both
+/// stage the exporter reports - "rendering" (or "rendering in software",
+/// going again after the hardware encoder stopped), "mixing audio",
+/// "muxing" - and the API's documentation names them "video", "audio" and "mux"; both
 /// are known here, and one this does not know counts as the first.
 fn stage_place(stage: &str) -> usize {
     match stage {
         "cutout" => 0,
         "stabilize" => 1,
-        "video" | "rendering" => 2,
+        "video" | "rendering" | "rendering in software" => 2,
         "audio" | "mixing audio" => 3,
         "mux" | "muxing" => 4,
         _ => 0,
@@ -289,7 +290,7 @@ pub fn catalogue() -> Vec<Tool> {
         command(
             "clip_trim",
             "Trim a clip",
-            "Moves one edge of a clip by `delta` seconds of timeline: `edge` \"start\" with a positive delta shortens it from the head (the picture does not slide), \"end\" with a positive delta lengthens it. A clip is never shorter than 1/60 s or longer than its media allows. `ripple: true` closes or opens the gap behind it on that lane.",
+            "Moves one edge of a clip by `delta` seconds of timeline: `edge` \"start\" with a positive delta shortens it from the head (the picture does not slide), \"end\" with a positive delta lengthens it. A clip is never shorter than 1/60 s or longer than its media allows. `ripple: true` closes or opens the gap behind it on that lane, and on the main lane the other lanes follow while the timeline's linkage is on (`timeline_linkage`).",
             "trimClip",
         ),
         command(
@@ -307,7 +308,7 @@ pub fn catalogue() -> Vec<Tool> {
         command(
             "clips_remove",
             "Delete clips",
-            "Deletes clips from the active timeline. `ripple: true` closes the gaps they leave on their lanes; false leaves the gaps.",
+            "Deletes clips from the active timeline. `ripple: true` closes the gaps they leave on their lanes, and on the main lane the other lanes follow while the timeline's linkage is on (`timeline_linkage`); false leaves the gaps.",
             "removeClips",
         )
         .destroying(),
@@ -345,6 +346,12 @@ pub fn catalogue() -> Vec<Tool> {
             "setTimelineBackground",
         ),
         command(
+            "timeline_linkage",
+            "Link the lanes to the main one",
+            "Turns linkage on or off for a timeline (`timelineId` from `timeline_read`, `on`). On - the default - a ripple on the main lane (the lowest one with a picture) moves the other lanes with it: clips after the edit follow, a clip running across it stays, and a title wholly over footage a ripple delete removed goes with it. Off, a ripple moves only its own lane.",
+            "setTimelineLinkage",
+        ),
+        command(
             "clip_transform",
             "Place, scale or rotate a clip",
             "Sets a picture's placement; only the fields given change. scale 0.05-8 (1 fits the frame), offsetX/offsetY as fractions of the frame's width/height from the centre (positive is right/down, within ±3), rotation in degrees, stretchX/stretchY 0.1-10.",
@@ -359,8 +366,20 @@ pub fn catalogue() -> Vec<Tool> {
         command(
             "title_add",
             "Add a title",
-            "Places a title (text over the picture) at `start` seconds for `duration` seconds (4 s when absent). `style` sets the words and look - `content`, `fontFamily`, `fontSize` (fraction of frame height, 0.09 by default), `fontWeight` (100-900), `color` (\"#rrggbb\"), `align`, `background`, `strokeWidth`... - and needs only the fields that differ from the default. `offsetY` places it vertically as a fraction of frame height from the centre (positive is down). With no `trackId` and `above: true` it lands on a lane above the picture. The new clip's id is `createdId`.",
+            "Places a title (text over the picture) at `start` seconds for `duration` seconds (4 s when absent). `style` sets the words and look - `content`, `fontFamily`, `fontSize` (fraction of frame height, 0.09 by default), `fontWeight` (100-900), `color` (\"#rrggbb\"), `align`, `background`, `strokeWidth`... - and needs only the fields that differ from the default. `offsetY` places it vertically as a fraction of frame height from the centre (positive is down). With no `trackId` and `above: true` it lands on a lane above the picture. The new clip's id is `createdId`. To give some of its words a look of their own afterwards, use `title_style_words`.",
             "addTextClip",
+        ),
+        command(
+            "title_style_words",
+            "Style some of a title's words",
+            "Gives some of a title's words a look of their own, as dragging over them in the window's Text tab does: the characters `start` to `end` (counted in characters of the title's text, not bytes; `end` is one past the last) wear each field of `patch` - `color` (\"#rrggbb\"), `fontWeight` (100-900), `italic`, `underline`, `strikethrough`, `fontScale` (a multiple of the title's size, 0.1-10) and `strokeColor` - over the title's own look. Fields left out stay as they were on those characters; the rest of the title is untouched and keeps following its style. Typed words carry these looks along. `timeline_read` lists them as the clip's `textRuns`.",
+            "styleTextRange",
+        ),
+        command(
+            "title_clear_word_styles",
+            "Clear words' own looks",
+            "Gives a title's words back to its own look: every look of their own between the characters `start` and `end`, or on all of its words when they are left out.",
+            "clearTextStyles",
         ),
         Tool {
             name: "captions_add",
@@ -387,7 +406,7 @@ pub fn catalogue() -> Vec<Tool> {
         command(
             "effect_layer_add",
             "Add an effect layer",
-            "Places an effect or look as a layer over the timeline: from `start` for `duration` seconds (5 s when absent), it treats everything beneath it. `effectId` is a package id from `effects_list`; the layer's opacity (via `clip_update`) is how strongly it applies. To put an effect on one clip instead, set that clip's `videoEffects` with `clip_update`.",
+            "Places an effect or look as a layer over the timeline: from `start` for `duration` seconds (5 s when absent), it treats everything beneath it. `effectId` is a package id from `effects_list`; the layer's opacity (via `clip_update`) is how strongly it applies. To put an effect on one clip instead, set that clip's `videoEffects` with `clip_update`. With `sound: true` and an \"audio\" package it is a sound layer (kind \"soundLayer\"): its chain, in the clip's `filters`, treats the mix of everything audible for its span, its opacity the wet/dry and its fades the ramps.",
             "addLayerClip",
         ),
         command(
@@ -460,9 +479,12 @@ pub fn catalogue() -> Vec<Tool> {
         Tool {
             name: "preview_frame",
             title: "Preview a frame",
-            description: "Renders the true composited frame at `time` seconds on an open project's timeline and returns it as an image to look at - titles, effects and transforms included. Without `width` and `height` it fits within 1280 pixels; give both for another size (8192 at most). With `output` (a .png path) it is written there instead.",
-            read_only: true,
-            destructive: false,
+            description: "Renders the true composited frame at `time` seconds on an open project's timeline and returns it as an image to look at - titles, effects and transforms included. Without `width` and `height` it fits within 1280 pixels; give both for another size (8192 at most). With `output` (a .png path) it is written there instead, replacing any file already at that path.",
+            // Not read-only: with `output` it writes a file, over one that
+            // is there. A client that trusts the hint to skip asking would
+            // let an agent overwrite anything under home.
+            read_only: false,
+            destructive: true,
             idempotent: true,
             action: Action::PreviewFrame,
         },
@@ -775,7 +797,12 @@ fn captions(mut arguments: Value) -> Result<Request, ApiError> {
             "fontSize": 0.04,
             "fontWeight": 600,
         }),
-        Some(Value::Object(style)) => Value::Object(style),
+        // Some words' looks are about one title's words, not every
+        // caption's, so a style's runs do not carry over.
+        Some(Value::Object(mut style)) => {
+            style.remove("runs");
+            Value::Object(style)
+        }
         Some(_) => return Err(invalid("`style` is an object")),
     };
     if let Some(unknown) = fields.keys().next() {
@@ -1008,6 +1035,14 @@ mod tests {
                 json!({ "path": "/tmp/Cut", "start": 1.0, "duration": 3.0, "above": true, "style": { "content": "Hello", "fontSize": 0.08, "align": "left" }, "offsetY": -0.3 }),
             ),
             (
+                "title_style_words",
+                json!({ "path": "/tmp/Cut", "clipId": "c1", "start": 0, "end": 4, "patch": { "color": "#ffd400", "fontWeight": 800 } }),
+            ),
+            (
+                "title_clear_word_styles",
+                json!({ "path": "/tmp/Cut", "clipId": "c1" }),
+            ),
+            (
                 "captions_add",
                 json!({ "path": "/tmp/Cut", "captions": [{ "start": 0.0, "end": 1.5, "text": "Hi" }], "style": { "color": "#ffff00" }, "offsetY": 0.3 }),
             ),
@@ -1047,6 +1082,10 @@ mod tests {
             (
                 "timeline_background",
                 json!({ "path": "/tmp/Cut", "timelineId": "tl1", "background": { "kind": "blur", "amount": 0.5 } }),
+            ),
+            (
+                "timeline_linkage",
+                json!({ "path": "/tmp/Cut", "timelineId": "tl1", "on": false }),
             ),
             ("effects_list", json!({ "kind": "transition" })),
             ("template_list", json!({})),

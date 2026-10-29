@@ -57,6 +57,12 @@ pub(crate) fn for_url(url: &str) -> Option<Route> {
     }
 }
 
+/// Whether `url` names this computer itself (localhost, 127.0.0.1, ::1):
+/// not the internet.
+pub(crate) fn is_local(url: &str) -> bool {
+    target(url).is_some_and(|(_, host)| is_loopback(&host))
+}
+
 /// The scheme and host of `url`, lowercased, without a port, a user or
 /// IPv6's brackets.
 fn target(url: &str) -> Option<(String, String)> {
@@ -527,6 +533,12 @@ mod tests {
         assert_eq!(read("not a url"), None);
         assert!(is_loopback("127.0.0.1") && is_loopback("::1") && is_loopback("localhost"));
         assert!(!is_loopback("github.com"));
+        assert!(
+            is_local("http://127.0.0.1:8080/x")
+                && is_local("http://[::1]/")
+                && is_local("http://localhost/")
+        );
+        assert!(!is_local("https://github.com/x") && !is_local("not a url"));
     }
 
     #[test]

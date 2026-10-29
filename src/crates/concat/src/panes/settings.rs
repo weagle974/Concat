@@ -57,6 +57,8 @@ pub enum SettingsMsg {
     PlayheadStopsChanged(bool),
     /// The proxies switch: whether large files get a smaller copy to play.
     ProxiesChanged(bool),
+    /// The internet switch: off, Concat makes no request to the network.
+    InternetChanged(bool),
     /// The GPU switch: on, the window and the compositor draw on the GPU;
     /// off, in software. Read at the next launch.
     GpuChanged(bool),
@@ -201,6 +203,7 @@ fn failure_line(failure: &concat_host::models::Failure) -> String {
     match failure {
         Failure::NotTheFile => t("settings.notTheModelFile"),
         Failure::Unreachable { cause, proxy } => match cause {
+            Cause::Disabled => t("settings.downloadDisabled"),
             Cause::Blocked => t("settings.downloadBlocked"),
             Cause::Offline => t("settings.downloadOffline"),
             Cause::Dns => t("settings.downloadDns"),
@@ -376,6 +379,15 @@ impl SettingsPane {
                 // On, the media already in the project gets its proxies
                 // straight away (refresh_art's stamp holds the switch);
                 // off, playback reads the files from the next frame.
+            }
+            SettingsMsg::InternetChanged(on) => {
+                studio.prefs.internet = on;
+                concat_host::net::set_internet(on);
+                studio.prefs.save(&studio.host.dirs);
+                log::info!(
+                    "network: internet access turned {}",
+                    if on { "on" } else { "off" }
+                );
             }
             SettingsMsg::GpuChanged(on) => {
                 studio.prefs.software_gpu = !on;
@@ -952,6 +964,7 @@ impl SettingsPane {
                 .unwrap_or(2) as i32,
             playhead_stops: self.playhead_stops,
             proxies: studio.prefs.proxies,
+            internet: studio.prefs.internet,
             gpu: !studio.prefs.draws_in_software(),
             gpu_switchable: cfg!(any(windows, target_os = "linux")),
             magnetic: studio.prefs.magnetic(),

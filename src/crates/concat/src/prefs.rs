@@ -68,6 +68,11 @@ pub struct Preferences {
     /// may not take (an HDR one opened NVENC first), and the person who
     /// wants one for smoother playback turns it on in Settings.
     pub proxies: bool,
+    /// Whether Concat may use the internet at all: update checks, model and
+    /// sound downloads. Off by default, and while it is off nothing leaves
+    /// this device. Turned on in Settings > General, for as long as the
+    /// person wants it.
+    pub internet: bool,
     /// Drawing in software: the window and the compositor on the
     /// platform's software rasteriser (WARP, lavapipe) instead of the GPU,
     /// as the person chose in Settings > General or with `concat
@@ -756,5 +761,16 @@ mod tests {
         assert!(text.contains("\"drawInSoftware\":true"), "{text}");
         let back: Preferences = serde_json::from_str(&text).unwrap();
         assert!(back.software_gpu);
+    }
+
+    #[test]
+    fn the_internet_is_off_until_the_person_turns_it_on() {
+        assert!(!Preferences::default().internet);
+        let old: Preferences = serde_json::from_str(r#"{"proxies": true}"#).expect("an old file");
+        assert!(!old.internet, "a file from before the switch leaves it off");
+        let on: Preferences = serde_json::from_str(r#"{"internet": true}"#).expect("a file");
+        assert!(on.internet);
+        let saved = serde_json::to_string(&on).expect("serialises");
+        assert!(saved.contains("\"internet\":true"));
     }
 }

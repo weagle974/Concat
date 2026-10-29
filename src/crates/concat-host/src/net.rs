@@ -17,10 +17,28 @@
 //! than adding to it, and Android gives a process no system store to read,
 //! so that would have failed every download on a phone instead.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use crate::route::Route;
+
+/// Whether Concat may reach the internet at all: the "Internet access"
+/// switch in Settings > General. Off, [`get`] refuses every request that
+/// leaves this computer before a socket is opened; the loopback address
+/// (Concat's own automation server) is not the internet and is never
+/// refused. Off at start, until the saved setting says otherwise.
+static INTERNET: AtomicBool = AtomicBool::new(false);
+
+/// Turns the internet on or off for this run.
+pub fn set_internet(allowed: bool) {
+    INTERNET.store(allowed, Ordering::Relaxed);
+}
+
+/// Whether the internet is on.
+pub fn internet_allowed() -> bool {
+    INTERNET.load(Ordering::Relaxed)
+}
 
 /// Which roots a connection trusts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +64,8 @@ pub enum Trust {
 /// class it falls in, which is the same on every platform.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cause {
+    /// The person turned the internet off in Settings; nothing was sent.
+    Disabled,
     /// Something on this computer refused Concat a connection before it
     /// left the machine: a firewall, an antivirus's web shield, parental
     /// controls, a VPN's kill switch. Windows says WSAEACCES (10013), Unix
@@ -80,6 +100,7 @@ impl Cause {
     /// language from the cause itself.
     pub fn describe(self) -> String {
         match self {
+            Cause::Disabled => "internet access is turned off in Settings".to_owned(),
             Cause::Blocked => "something on this computer blocked Concat from the network - \
                                a firewall, an antivirus or a VPN; the browser may be allowed \
                                where Concat is not"
@@ -105,6 +126,7 @@ impl Cause {
     /// other failure, and one server's 404 explains none.
     fn weight(self) -> u8 {
         match self {
+            Cause::Disabled => 10,
             Cause::Blocked => 9,
             Cause::Proxy => 8,
             Cause::Certificate => 7,
@@ -161,6 +183,14 @@ pub fn get(
     trust: Trust,
     prepare: &dyn Fn(ureq::Request) -> ureq::Request,
 ) -> Result<ureq::Response, Box<Failure>> {
+    if !internet_allowed() && !crate::route::is_local(url) {
+        log::debug!("network: {url} not requested, internet access is off");
+        return Err(Box::new(Failure {
+            error: ureq::Error::from(std::io::Error::other("internet access is off")),
+            cause: Cause::Disabled,
+            proxy: None,
+        }));
+    }
     let send = |route: Option<&Route>| {
         prepare(agent(route, connect, read, trust).get(url))
             .call()
@@ -396,6 +426,42 @@ mod tests {
         .expect_err("nothing answers");
         assert_eq!(failure.cause, Cause::Refused);
         assert_eq!(failure.proxy, None, "loopback never goes through a proxy");
+    }
+
+    /// With the internet off, a request for anywhere but this computer is
+    /// refused before a socket is opened; the loopback address is not the
+    /// internet and still goes through. The switch is a global, so this is
+    /// the only test that moves it, and it puts it back.
+    #[test]
+    fn with_the_internet_off_nothing_leaves_the_computer() {
+        let before = internet_allowed();
+        set_internet(false);
+        let ask = |url: &str| {
+            get(
+                url,
+                Duration::from_millis(200),
+                Duration::from_millis(200),
+                Trust::System,
+                &|request| request,
+            )
+        };
+        let failure = ask("https://github.com/x").expect_err("the internet is off");
+        assert_eq!(failure.cause, Cause::Disabled);
+        assert_eq!(failure.proxy, None);
+        assert!(Cause::Disabled.describe().contains("turned off"));
+        assert_eq!(
+            Cause::telling([Cause::Blocked, Cause::Disabled]),
+            Some(Cause::Disabled)
+        );
+        // Loopback is asked for real: nothing listens, so it is refused by
+        // the port, not by the switch.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .and_then(|listener| listener.local_addr())
+            .expect("a port")
+            .port();
+        let local = ask(&format!("http://127.0.0.1:{port}/")).expect_err("nothing answers");
+        assert_ne!(local.cause, Cause::Disabled);
+        set_internet(before);
     }
 
     #[test]

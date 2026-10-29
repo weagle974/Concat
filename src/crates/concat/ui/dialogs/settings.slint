@@ -77,6 +77,8 @@ export struct SettingsData {
     playhead-stops: bool,
     /// large files get a smaller copy for playback
     proxies: bool,
+    /// Concat may reach the internet (updates, downloads); off, it sends nothing
+    internet: bool,
     /// the window and the compositor draw on the GPU, not in software
     gpu: bool,
     /// there is a software rasteriser to draw on instead: Windows, Linux
@@ -662,6 +664,7 @@ export component SettingsDialog inherits Modal {
     callback scale-changed(index: int);
     callback playhead-stops-changed(on: bool);
     callback proxies-changed(on: bool);
+    callback internet-changed(on: bool);
     callback gpu-changed(on: bool);
     callback magnetic-changed(on: bool);
     callback download-source-changed(index: int);
@@ -901,6 +904,19 @@ export component SettingsDialog inherits Modal {
                     choice: root.data.language;
                     open: false;
                     chose(index) => { root.language-changed(index); }
+                }
+
+                // Off, Concat makes no request to the internet at all: no
+                // update check, no model or sound download. The person's
+                // projects and media never leave the device either way.
+                DialogSection {
+                    ruled: false;
+                    title: I18n.t("settings.internet");
+                    hint: I18n.t("settings.internetHint");
+                    switchable: true;
+                    on: root.data.internet;
+                    open: false;
+                    switched(on) => { root.internet-changed(on); }
                 }
 
                 // What the log records. Normal is what a bug report needs

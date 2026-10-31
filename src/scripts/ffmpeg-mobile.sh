@@ -73,6 +73,18 @@ case "$target" in
     host_tag=$(ls "$ndk/toolchains/llvm/prebuilt" | head -1)
     bin=$ndk/toolchains/llvm/prebuilt/$host_tag/bin
     echo "Building FFmpeg $version for $target with NDK at $ndk (API $android_api)"
+    # FFmpeg's MediaCodec encoder takes eight-bit pictures only (it names
+    # YUV420P and NV12 and nothing deeper), so a ten-bit export was refused
+    # by FFmpeg itself, before the phone's chip was ever asked. The patch
+    # lets it hand a chip P010, Android's ten-bit layout, where the chip
+    # says it takes it. Applied once: a source tree kept from an earlier
+    # run is already patched.
+    p010=$workspace/scripts/ffmpeg-mediacodec-p010.patch
+    if patch -p1 -d "$src" --dry-run -R -s < "$p010" >/dev/null 2>&1; then
+      echo "FFmpeg's MediaCodec encoder already takes P010"
+    else
+      patch -p1 -d "$src" < "$p010"
+    fi
     # The x86_64 build is the one CI's emulators can run, never shipped:
     # FFmpeg's hand-written assembly is left out there, so the build needs
     # no assembler, and its speed is nobody's concern.

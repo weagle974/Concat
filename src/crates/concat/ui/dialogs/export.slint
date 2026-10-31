@@ -364,9 +364,22 @@ component OutputSection inherits DialogSection {
             alignment: end;
             VerticalLayout {
                 alignment: center;
-                Switch {
-                    checked: root.data.hdr-experimental;
-                    toggled(on) => { root.hdr-experimental-changed(on); }
+                // The Switch flips itself when touched, which cuts its link
+                // to `checked`: after a refusal it would stay on while the
+                // note says it was left off. So it only shows the state, and a
+                // touch area over it asks for the opposite of what is shown.
+                Rectangle {
+                    width: 30px;
+                    height: 17px;
+
+                    Switch {
+                        checked: root.data.hdr-experimental;
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.hdr-experimental-changed(!root.data.hdr-experimental); }
+                    }
                 }
             }
         }

@@ -709,29 +709,48 @@ impl VideoCodec {
             ffmpeg::color::TransferCharacteristic::ARIB_STD_B67,
             ffmpeg::color::Space::BT2020NCL,
         );
-        let mut said = format!("no linked {} encoder takes ten bits", self.label());
-        for name in self.linked(true, true) {
-            let Some(found) = encoder::find_by_name(name) else {
-                continue;
-            };
-            // Nothing is written: the path only names the file in an error.
-            match open_video(
-                name,
-                found,
-                Path::new("probe.mp4"),
-                (1280, 720),
-                ffmpeg::Rational::new(30, 1),
-                &options,
-                tags,
-                Some(Signal::Hlg),
-                true,
-                Attempt::AsAsked,
-            ) {
-                Ok(_) => return Ok(name),
-                Err(error) => said = format!("{name}: {error}"),
+        let (answer, heard) = ffi::capturing(|| {
+            let mut said = format!("no linked {} encoder takes ten bits", self.label());
+            for name in self.linked(true, true) {
+                let Some(found) = encoder::find_by_name(name) else {
+                    continue;
+                };
+                // Nothing is written: the path only names the file in an error.
+                match open_video(
+                    name,
+                    found,
+                    Path::new("probe.mp4"),
+                    (1280, 720),
+                    ffmpeg::Rational::new(30, 1),
+                    &options,
+                    tags,
+                    Some(Signal::Hlg),
+                    true,
+                    Attempt::AsAsked,
+                ) {
+                    Ok(_) => return Ok(name),
+                    Err(error) => said = format!("{name}: {error}"),
+                }
             }
-        }
-        Err(said)
+            Err(said)
+        });
+        answer.map_err(|said| {
+            // What FFmpeg said on the way, without its "[encoder @ 0x...]"
+            // prefix, which is an address and means nothing to read.
+            let heard: Vec<String> = heard
+                .iter()
+                .map(|line| match line.split_once("] ") {
+                    Some((_, rest)) if line.starts_with('[') => rest.trim().to_owned(),
+                    _ => line.trim().to_owned(),
+                })
+                .filter(|line| !line.is_empty())
+                .collect();
+            if heard.is_empty() {
+                said
+            } else {
+                format!("{said} ({})", heard.join("; "))
+            }
+        })
     }
 }
 

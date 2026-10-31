@@ -32,6 +32,29 @@ pub fn name_channels(frame: &mut ffmpeg::util::frame::audio::Audio) {
     }
 }
 
+/// Where `relay` keeps what FFmpeg says at warning level or worse while
+/// [`capturing`] runs, and nowhere otherwise.
+static CAPTURE: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(None);
+
+/// Runs `run` and returns what it produced with the first lines FFmpeg
+/// said at warning level or worse meanwhile (eight at most). FFmpeg's
+/// errors go nowhere a person sees, and an encoder that will not open
+/// answers with a bare "Invalid argument"; the line before it says why.
+/// One capture at a time: a second one started meanwhile hears nothing.
+pub(crate) fn capturing<T>(run: impl FnOnce() -> T) -> (T, Vec<String>) {
+    init();
+    if let Ok(mut capture) = CAPTURE.lock() {
+        *capture = Some(Vec::new());
+    }
+    let result = run();
+    let lines = CAPTURE
+        .lock()
+        .ok()
+        .and_then(|mut capture| capture.take())
+        .unwrap_or_default();
+    (result, lines)
+}
+
 /// Makes sure the libraries are initialised and quiet. Cheap after the
 /// first call; every entry point calls it.
 pub fn init() {
@@ -114,6 +137,15 @@ unsafe extern "C" fn relay(
     let text = text.trim_end();
     if text.is_empty() {
         return;
+    }
+    // A probe that wants to quote what FFmpeg said, see `capturing`. Never
+    // waited for: a line that finds the lock taken is not kept.
+    if level <= ffmpeg::sys::AV_LOG_WARNING
+        && let Ok(mut capture) = CAPTURE.try_lock()
+        && let Some(lines) = capture.as_mut()
+        && lines.len() < 8
+    {
+        lines.push(text.to_owned());
     }
     if level <= ffmpeg::sys::AV_LOG_FATAL {
         log::error!(target: "ffmpeg", "{text}");
@@ -483,5 +515,35 @@ mod tests {
         assert_eq!(seconds(1001, tb), Some(Rational::new(1001, 30000)));
         assert_eq!(seconds(5, ffmpeg::Rational::new(1, 0)), None);
         assert_eq!(av_ticks(Rational::new(3, 2)), 1_500_000);
+    }
+
+    #[test]
+    fn what_ffmpeg_says_while_a_probe_runs_is_kept_and_nothing_else_is() {
+        // A message at error level reaches the capture; one below warning
+        // (info) does not; and outside `capturing` nothing is kept at all.
+        let say = |level: c_int, text: &str| {
+            let text = std::ffi::CString::new(format!("{text}\n")).expect("no NUL");
+            // SAFETY: a printf-style call with `%s` and a NUL-terminated
+            // string that outlives it.
+            unsafe {
+                ffmpeg::sys::av_log(std::ptr::null_mut(), level, c"%s".as_ptr(), text.as_ptr());
+            }
+        };
+        say(ffmpeg::sys::AV_LOG_ERROR, "before the capture");
+        let (answer, heard) = capturing(|| {
+            say(
+                ffmpeg::sys::AV_LOG_ERROR,
+                "pixel format p010le is not supported",
+            );
+            say(ffmpeg::sys::AV_LOG_INFO, "a chatty line");
+            7
+        });
+        assert_eq!(answer, 7);
+        assert_eq!(
+            heard,
+            vec!["pixel format p010le is not supported".to_owned()]
+        );
+        let (_, after) = capturing(|| ());
+        assert!(after.is_empty(), "the capture was left open: {after:?}");
     }
 }

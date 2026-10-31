@@ -236,7 +236,7 @@
   "export.couldNotPublish": "บันทึกไปที่ {0} ไม่ได้: {1}",
   "export.couldNotShowFile": "แสดงไฟล์ไม่ได้: {0}",
   "export.destination": "ปลายทาง",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

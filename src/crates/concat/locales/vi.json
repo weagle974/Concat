@@ -236,7 +236,7 @@
   "export.couldNotPublish": "Không thể lưu vào {0}: {1}",
   "export.couldNotShowFile": "Không thể hiển thị tệp: {0}",
   "export.destination": "Đích lưu",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

@@ -236,7 +236,7 @@
   "export.couldNotPublish": "無法儲存到 {0}：{1}",
   "export.couldNotShowFile": "無法顯示檔案：{0}",
   "export.destination": "目的地",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

@@ -236,7 +236,7 @@
   "export.couldNotPublish": "Не удалось сохранить в {0}: {1}",
   "export.couldNotShowFile": "Не удалось показать файл: {0}",
   "export.destination": "Назначение",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

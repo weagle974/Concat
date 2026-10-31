@@ -236,7 +236,7 @@
   "export.couldNotPublish": "{0} に保存できませんでした: {1}",
   "export.couldNotShowFile": "ファイルを表示できませんでした : {0}",
   "export.destination": "保存先",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

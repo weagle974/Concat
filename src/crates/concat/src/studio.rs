@@ -8070,6 +8070,120 @@ impl Studio {
         }
     }
 
+    /// The pictures of a colour test, made off the window's thread by the
+    /// returned job: the first video of the bin's first frame, taken
+    /// through each stage that decides its colours, one PNG a stage, so a
+    /// wrong colour can be traced to the stage it first shows in.
+    ///
+    /// A. decoded for a small picture on the CPU, as the timeline's
+    ///    thumbnails are; B. decoded at the file's size in its own signal,
+    ///    the code values shown as they are; C. the same at a quarter of
+    ///    the size; D. the monitor's compositor at the output's size, which
+    ///    is what Save Video Frame As and the export draw.
+    ///
+    /// None without a project or a video in it. The job answers with a few
+    /// lines about what it wrote, for the encoder report to carry.
+    pub fn colour_test(
+        &mut self,
+        folder: std::path::PathBuf,
+    ) -> Option<Box<dyn FnOnce() -> String + Send>> {
+        use concat_media::{DecodeOptions, Decoder, FrameSource};
+        let item = self
+            .project()
+            .media
+            .iter()
+            .find(|item| item.kind == model::MediaKind::Video)?
+            .clone();
+        let (clips, settings) = self.preview_clips()?;
+        let (out_width, out_height) = self.output_size();
+        let spec = concat_host::preview::FrameSpec {
+            time: f64::from(self.playhead),
+            width: out_width,
+            height: out_height,
+            moving: false,
+            proxy: false,
+            color_space: self.project().active().video.color_space,
+            canvas: self.project().active().video.canvas,
+        };
+        let monitor = self.host.monitor.clone();
+        let (width, height) = (item.width.unwrap_or(1080), item.height.unwrap_or(1920));
+        Some(Box::new(move || {
+            let _ = std::fs::create_dir_all(&folder);
+            let mut lines = String::from("\ncolour test (open these pictures in the gallery):\n");
+            let save = |name: &str, width: u32, height: u32, rgba: Vec<u8>| -> String {
+                let file = folder.join(name);
+                let result = image::RgbaImage::from_raw(width, height, rgba)
+                    .ok_or_else(|| "wrong size".to_owned())
+                    .and_then(|picture| picture.save(&file).map_err(|error| error.to_string()));
+                match result {
+                    Ok(()) => {
+                        platform::publish_document(file, "image/png", |_| {});
+                        format!("  {name} {width}x{height}\n")
+                    }
+                    Err(error) => format!("  {name}: {error}\n"),
+                }
+            };
+            // A decoded frame as eight-bit RGBA, whatever its depth: the
+            // high byte of each sixteen-bit channel, no conversion at all.
+            let eight = |frame: &concat_core::frame::Frame| -> Vec<u8> {
+                if frame.depth() == concat_core::frame::Depth::Eight {
+                    frame.pixels().to_vec()
+                } else {
+                    frame.pixels().chunks_exact(2).map(|pair| pair[1]).collect()
+                }
+            };
+            let first = |options: DecodeOptions| {
+                Decoder::open(&item.path, &options)
+                    .map_err(|error| error.to_string())
+                    .and_then(|mut decoder| {
+                        decoder
+                            .next_frame()
+                            .map_err(|error| error.to_string())?
+                            .ok_or_else(|| "no frame".to_owned())
+                    })
+            };
+            let small = (width / 4 / 2 * 2).max(2);
+            let small_high = (height / 4 / 2 * 2).max(2);
+            for (name, options, w, h) in [
+                (
+                    "concat-test-A-cpu-small.png",
+                    DecodeOptions::default().scaled_to(small, small_high),
+                    small,
+                    small_high,
+                ),
+                (
+                    "concat-test-B-deep-full.png",
+                    DecodeOptions::default().scaled_to(width, height).deep(true),
+                    width,
+                    height,
+                ),
+                (
+                    "concat-test-C-deep-small.png",
+                    DecodeOptions::default()
+                        .scaled_to(small, small_high)
+                        .deep(true),
+                    small,
+                    small_high,
+                ),
+            ] {
+                match first(options) {
+                    Ok(frame) => lines.push_str(&save(name, w, h, eight(&frame))),
+                    Err(error) => lines.push_str(&format!("  {name}: {error}\n")),
+                }
+            }
+            match monitor.frame(clips, &settings, spec) {
+                Ok(pixels) => lines.push_str(&save(
+                    "concat-test-D-compositor.png",
+                    out_width,
+                    out_height,
+                    pixels,
+                )),
+                Err(error) => lines.push_str(&format!("  concat-test-D-compositor.png: {error}\n")),
+            }
+            lines
+        }))
+    }
+
     /// Save Video Frame As: the frame under the playhead, drawn at the
     /// output's full size rather than the monitor's, written as a PNG
     /// where the person says - offered in the project's frames folder -

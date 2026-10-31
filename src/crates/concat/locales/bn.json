@@ -236,7 +236,7 @@
   "export.couldNotPublish": "{0}-এ সংরক্ষণ করা যায়নি: {1}",
   "export.couldNotShowFile": "ফাইলটি দেখানো যায়নি: {0}",
   "export.destination": "গন্তব্য",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

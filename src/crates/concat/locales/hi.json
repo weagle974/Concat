@@ -236,7 +236,7 @@
   "export.couldNotPublish": "{0} में सेव नहीं हो सका: {1}",
   "export.couldNotShowFile": "फ़ाइल नहीं दिखाई जा सकी: {0}",
   "export.destination": "गंतव्य",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

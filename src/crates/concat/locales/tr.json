@@ -236,7 +236,7 @@
   "export.couldNotPublish": "{0} konumuna kaydedilemedi: {1}",
   "export.couldNotShowFile": "Dosya gösterilemedi: {0}",
   "export.destination": "Hedef",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

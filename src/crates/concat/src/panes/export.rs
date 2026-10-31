@@ -202,11 +202,19 @@ impl ExportPane {
                 }
                 self.report_busy = true;
                 self.report = t("export.encoderReportWorking");
-                spawn(crate::platform::encoder_report, |studio, _, _, report| {
-                    studio.handle(Msg::Export(ExportMsg::EncoderReportReady(
-                        report.unwrap_or_default(),
-                    )));
-                });
+                let test = studio.colour_test(std::path::PathBuf::from(&self.folder));
+                spawn(
+                    move || {
+                        let mut report = crate::platform::encoder_report().unwrap_or_default();
+                        if let Some(test) = test {
+                            report.push_str(&test());
+                        }
+                        report
+                    },
+                    |studio, _, _, report| {
+                        studio.handle(Msg::Export(ExportMsg::EncoderReportReady(report)));
+                    },
+                );
             }
             ExportMsg::EncoderReportReady(report) => {
                 self.report_busy = false;

@@ -236,7 +236,7 @@
   "export.couldNotPublish": "Kan niet opslaan in {0}: {1}",
   "export.couldNotShowFile": "Kan het bestand niet tonen: {0}",
   "export.destination": "Bestemming",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

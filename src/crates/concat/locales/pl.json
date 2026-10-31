@@ -236,7 +236,7 @@
   "export.couldNotPublish": "Nie udało się zapisać w {0}: {1}",
   "export.couldNotShowFile": "Nie udało się pokazać pliku: {0}",
   "export.destination": "Miejsce docelowe",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

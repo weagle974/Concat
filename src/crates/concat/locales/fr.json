@@ -236,7 +236,7 @@
   "export.couldNotPublish": "Impossible d’enregistrer dans {0} : {1}",
   "export.couldNotShowFile": "Impossible d'afficher le fichier : {0}",
   "export.destination": "Destination",
-  "export.encoderReport": "Rapport des encodeurs",
+  "export.encoderReport": "Encodeurs et test des couleurs",
   "export.encoderReportRun": "Lire",
   "export.encoderReportWorking": "Lecture des encodeurs du téléphone…",
   "export.experimentalHdr": "HDR 10 bits",

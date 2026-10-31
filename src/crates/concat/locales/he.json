@@ -236,7 +236,7 @@
   "export.couldNotPublish": "לא ניתן לשמור אל {0}: {1}",
   "export.couldNotShowFile": "לא ניתן להציג את הקובץ: {0}",
   "export.destination": "יעד",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

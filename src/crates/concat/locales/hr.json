@@ -236,7 +236,7 @@
   "export.couldNotPublish": "Nije moguće spremiti u {0}: {1}",
   "export.couldNotShowFile": "Nije moguće prikazati datoteku: {0}",
   "export.destination": "Odredište",
-  "export.encoderReport": "Encoder report",
+  "export.encoderReport": "Encoders and colour test",
   "export.encoderReportRun": "Read",
   "export.encoderReportWorking": "Reading the phone's encoders…",
   "export.experimentalHdr": "HDR 10-bit",

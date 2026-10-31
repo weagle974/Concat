@@ -1255,6 +1255,22 @@ fn an_hdr_frame_is_conformed_to_sdr_on_the_way_in() {
     );
 }
 
+/// A deep frame of one colour, `rgb` each channel in `signal`, sixteen bits.
+fn deep_rgb(width: u32, height: u32, rgb: [f32; 3], signal: concat_core::frame::Signal) -> Frame {
+    let channel = |level: f32| (level.clamp(0.0, 1.0) * 65535.0).round() as u16;
+    let pixel: Vec<u8> = [channel(rgb[0]), channel(rgb[1]), channel(rgb[2]), u16::MAX]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    Frame::from_rgba64(
+        width,
+        height,
+        pixel.repeat((width * height) as usize),
+        signal,
+    )
+    .expect("a deep frame")
+}
+
 /// `plan` drawn into the working space and read back as it stands there,
 /// before the resolve: light, 1.0 SDR white, nothing clipped.
 fn working(gpu: &mut WgpuCompositor, plan: &FramePlan) -> Vec<[f32; 4]> {
@@ -2414,5 +2430,42 @@ fn a_background_is_wiped_with_its_picture() {
         frame.pixel(47, 20),
         Some([0, 0, 0, 255]),
         "the edge is the picture's"
+    );
+}
+
+/// A saturated Rec. 2020 colour lies outside Rec. 709: one channel is a
+/// negative amount of its primary. On an SDR timeline it is pulled inside
+/// by desaturating toward its own grey, not clipped channel by channel,
+/// which turned a night shot's slightly blue shadows into patches of pure
+/// blue where the noise crossed zero. An HDR timeline keeps what lies
+/// outside, for its own wide primaries.
+#[test]
+fn a_wide_gamut_colour_is_fitted_into_an_sdr_timeline_not_clipped() {
+    use concat_core::frame::Signal;
+    let Some(mut gpu) = gpu() else { return };
+    let frame = deep_rgb(4, 4, [0.15, 0.35, 0.6], Signal::Hlg);
+    let lowest = |pixels: &[[f32; 4]]| pixels[5][..3].iter().copied().fold(f32::MAX, f32::min);
+
+    let sdr = working(&mut gpu, &plan(4, 4, vec![layer(frame.clone())]));
+    assert!(lowest(&sdr) >= -1e-3, "on an SDR timeline: {:?}", sdr[5]);
+    // Fitted, not flattened: red is at the floor, but green is not dragged
+    // there with it, so the colour keeps its hue.
+    assert!(
+        sdr[5][1] > 0.005 && sdr[5][2] > sdr[5][1],
+        "hue lost: {:?}",
+        sdr[5]
+    );
+
+    let hdr = working(
+        &mut gpu,
+        &FramePlan {
+            output: Signal::Hlg,
+            ..plan(4, 4, vec![layer(frame)])
+        },
+    );
+    assert!(
+        lowest(&hdr) < -1e-3,
+        "an HDR timeline keeps what is outside: {:?}",
+        hdr[5]
     );
 }

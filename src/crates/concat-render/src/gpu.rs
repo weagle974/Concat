@@ -383,7 +383,7 @@ fn fs_resolve_pq(@builtin(position) at: vec4<f32>) -> @location(0) vec4<u32> {
 @fragment
 fn fs_resolve_tone_mapped(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let colour = textureLoad(picture, vec2<i32>(at.xy), 0);
-    let light = to_sdr(colour.rgb * 203.0) / 203.0;
+    let light = gamut_fit(to_sdr(colour.rgb * 203.0) / 203.0);
     let clipped = clamp(light, vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(pow(clipped, vec3<f32>(1.0 / 2.4)), colour.a);
 }
@@ -409,7 +409,7 @@ fn fs_resolve_straight(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f3
 @fragment
 fn fs_resolve_tone_mapped_straight(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let colour = unpremultiplied(textureLoad(picture, vec2<i32>(at.xy), 0));
-    let light = to_sdr(colour.rgb * 203.0) / 203.0;
+    let light = gamut_fit(to_sdr(colour.rgb * 203.0) / 203.0);
     let clipped = clamp(light, vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(pow(clipped, vec3<f32>(1.0 / 2.4)), colour.a);
 }
@@ -459,6 +459,27 @@ fn to_sdr(nits: vec3<f32>) -> vec3<f32> {
     let mapped = pq_nits(vec3<f32>(e2 * master)).r;
     return nits * (mapped / peak);
 }
+
+// A colour Rec. 709 cannot hold, brought inside it. The wide-gamut
+// primaries put a saturated colour at a negative amount of one or two of
+// Rec. 709's, and clipping each channel on its own leaves a shadow that
+// was a little blue as pure blue, patched wherever the noise crosses zero.
+// The colour is instead pulled toward the grey of its own luminance just
+// far enough that its lowest channel reaches zero: the light stays, the
+// hue stays, only the saturation gives. A colour already inside is
+// returned as it was.
+fn gamut_fit(rgb: vec3<f32>) -> vec3<f32> {
+    let lowest = min(rgb.r, min(rgb.g, rgb.b));
+    if (lowest >= 0.0) {
+        return rgb;
+    }
+    let luma = dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    if (luma <= 0.0) {
+        return vec3<f32>(0.0);
+    }
+    let keep = luma / (luma - lowest);
+    return vec3<f32>(luma) + (rgb - vec3<f32>(luma)) * keep;
+}
 "#;
 
 /// A deep frame (sixteen bits a channel, Rec. 2020, its source's own signal)
@@ -504,6 +525,16 @@ fn fs_upload_sdr_wide(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32
     return vec4<f32>(from_2020(lin), colour.a);
 }
 
+// On an SDR timeline a wide-gamut picture is brought inside Rec. 709 as it
+// arrives, where an HDR timeline keeps what lies outside for its own wide
+// primaries.
+@fragment
+fn fs_upload_sdr_wide_fit(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
+    let colour = deep_at(at);
+    let lin = pow(max(colour.rgb, vec3<f32>(0.0)), vec3<f32>(2.4));
+    return vec4<f32>(gamut_fit(from_2020(lin)), colour.a);
+}
+
 // ARIB STD-B67's inverse OETF to scene light, then BT.2100's OOTF for a
 // 1000-nit display (a system gamma of 1.2), which puts HLG's reference
 // white - 75 % of the signal - at 203 nits.
@@ -523,13 +554,13 @@ fn hlg_nits(signal: vec3<f32>) -> vec3<f32> {
 @fragment
 fn fs_upload_pq(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let colour = deep_at(at);
-    return vec4<f32>(from_2020(to_sdr(pq_nits(colour.rgb)) / 203.0), colour.a);
+    return vec4<f32>(gamut_fit(from_2020(to_sdr(pq_nits(colour.rgb)) / 203.0)), colour.a);
 }
 
 @fragment
 fn fs_upload_hlg(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let colour = deep_at(at);
-    return vec4<f32>(from_2020(to_sdr(hlg_nits(colour.rgb)) / 203.0), colour.a);
+    return vec4<f32>(gamut_fit(from_2020(to_sdr(hlg_nits(colour.rgb)) / 203.0)), colour.a);
 }
 
 // On an HDR timeline, kept: the highlights stay above white, 1000 nits of
@@ -742,7 +773,7 @@ pub struct WgpuCompositor {
     /// A deep frame into the working space, by signal: Rec. 2020 gamma,
     /// HLG and PQ conformed to SDR, then HLG and PQ kept HDR (see
     /// `DEEP_SHADER`).
-    deep_pipelines: [wgpu::RenderPipeline; 5],
+    deep_pipelines: [wgpu::RenderPipeline; 6],
     /// The layout a deep staging texture is bound with: sixteen-bit
     /// integers, read texel by texel.
     deep_layout: wgpu::BindGroupLayout,
@@ -1335,6 +1366,7 @@ impl WgpuCompositor {
             "fs_upload_pq",
             "fs_upload_hlg_hdr",
             "fs_upload_pq_hdr",
+            "fs_upload_sdr_wide_fit",
         ]
         .map(|entry| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -2422,7 +2454,8 @@ impl WgpuCompositor {
                 (Signal::Pq, false) => 2,
                 (Signal::Hlg, true) => 3,
                 (Signal::Pq, true) => 4,
-                (Signal::Sdr | Signal::SdrWide, _) => 0,
+                (Signal::Sdr | Signal::SdrWide, true) => 0,
+                (Signal::Sdr | Signal::SdrWide, false) => 5,
             }]
         } else {
             &self.upload_pipeline

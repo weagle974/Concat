@@ -429,6 +429,57 @@ impl ExportPane {
         self.hdr(studio) || (self.ten_bit && self.codec(studio).ten_bit_available())
     }
 
+    /// What the footage on the timeline was recorded as, read from the
+    /// files and not from the project's settings: "HEVC · 3840 × 2160 ·
+    /// 29.97 fps · HLG" for the first video, and how many others there are
+    /// when they differ from it. Empty when nothing on the timeline is a
+    /// picture the probe measured.
+    fn source(&self, studio: &Studio) -> String {
+        use concat_project::model::ColorSpace;
+        let Some(session) = studio.session.as_ref() else {
+            return String::new();
+        };
+        let media = &session.project().media;
+        let mut seen: Vec<String> = Vec::new();
+        for clip in &studio.timeline().clips {
+            let Some(item) = media.iter().find(|item| item.id == clip.media_id) else {
+                continue;
+            };
+            let (Some(width), Some(height)) = (item.width, item.height) else {
+                continue;
+            };
+            let mut words = Vec::new();
+            if let Some(codec) = item.video_codec.as_deref() {
+                words.push(match codec {
+                    "h264" => "H.264".to_owned(),
+                    "hevc" | "h265" => "HEVC".to_owned(),
+                    other => other.to_uppercase(),
+                });
+            }
+            words.push(format!("{width} × {height}"));
+            if let Some(rate) = item.frame_rate {
+                words.push(format!("{rate:.2} fps"));
+            }
+            words.push(
+                match item.color_space {
+                    ColorSpace::Hlg => "HLG",
+                    ColorSpace::Pq => "PQ",
+                    ColorSpace::Sdr => "SDR",
+                }
+                .to_owned(),
+            );
+            let line = words.join(" · ");
+            if !seen.contains(&line) {
+                seen.push(line);
+            }
+        }
+        match seen.split_first() {
+            None => String::new(),
+            Some((first, [])) => first.clone(),
+            Some((first, rest)) => format!("{first} (+{})", rest.len()),
+        }
+    }
+
     /// Starts the render on a worker, once the name is a file's and no
     /// file is already there; its reports come back as messages.
     fn start(&mut self, studio: &mut Studio) {
@@ -590,6 +641,7 @@ impl ExportPane {
             }
             .into(),
             format: format!("{width} × {height} · {rate:.2} fps").into(),
+            source: self.source(studio).into(),
             duration: {
                 let whole = studio.duration().max(0.0) as i32;
                 format!("{}:{:02}", whole / 60, whole % 60).into()
@@ -640,9 +692,18 @@ impl ExportPane {
             ten_bit: self.ten_bit,
             hdr_timeline: studio.timeline().video.color_space.is_hdr(),
             hdr: self.hdr(studio),
-            deep_available: concat_media::VideoCodec::ALL
-                .iter()
-                .any(|codec| codec.ten_bit_available()),
+            // The codecs HDR and the ten-bit switch are written in: H.264,
+            // HEVC, AV1. ProRes 4444 is ten bits on every platform, and its
+            // software encoder is linked on a phone, which counted here
+            // offered HDR and the switch where the hardware encoders take
+            // eight bits - and the file came out SDR whatever was chosen.
+            deep_available: [
+                concat_media::VideoCodec::H264,
+                concat_media::VideoCodec::Hevc,
+                concat_media::VideoCodec::Av1,
+            ]
+            .iter()
+            .any(|codec| codec.ten_bit_available()),
             hdr_label: match studio.timeline().video.color_space {
                 concat_project::model::ColorSpace::Pq => "HDR (PQ)",
                 _ => "HDR (HLG)",
@@ -655,6 +716,11 @@ impl ExportPane {
                 // will be doing it.
                 let codec = self.codec(studio);
                 let mut words = vec![codec.label().to_owned()];
+                // An HDR timeline written as SDR says so, rather than the
+                // line reading as though nothing were lost.
+                if studio.timeline().video.color_space.is_hdr() && !self.hdr(studio) {
+                    words.push("SDR".to_owned());
+                }
                 if self.deep(studio) {
                     words.push("10-bit".to_owned());
                 }

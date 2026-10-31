@@ -1229,6 +1229,7 @@ version = "0.2.8"
 dependencies = [
  "block2 0.6.2",
  "concat-api",
+ "concat-bundle",
  "concat-core",
  "concat-effects",
  "concat-export",
@@ -1288,6 +1289,16 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "concat-bundle"
+version = "0.2.8"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "zip",
 ]
 
 [[package]]

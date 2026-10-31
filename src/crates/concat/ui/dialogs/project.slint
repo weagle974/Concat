@@ -51,6 +51,7 @@ export component ProjectDialog inherits Modal {
     callback color-space-changed(index: int);
     callback canvas-changed(value: color);
     callback apply();
+    callback export-file();
 
     open: root.data.open;
     title: I18n.t("project.project");
@@ -200,6 +201,29 @@ export component ProjectDialog inherits Modal {
                 CanvasPicker {
                     value: root.data.canvas;
                     changed(value) => { root.canvas-changed(value); }
+                }
+            }
+        }
+
+        // The project as one file. A phone keeps its projects in the app's
+        // own folder, which an uninstall takes with it; this is how they
+        // leave it, and come back (the launch screen's Open a project file).
+        DialogSection {
+            title: I18n.t("project.backup");
+
+            Text {
+                text: I18n.t("project.exportFileNote");
+                color: Theme.fg-dim;
+                font-size: Theme.fs-sm;
+                wrap: word-wrap;
+            }
+
+            DialogRow {
+                Button {
+                    block: true;
+                    glyph: Glyph.export;
+                    label: I18n.t("project.exportFile");
+                    clicked => { root.export-file(); }
                 }
             }
         }

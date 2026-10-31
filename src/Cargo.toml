@@ -15,6 +15,7 @@ concat-project = { path = "crates/concat-project" }
 concat-render = { path = "crates/concat-render" }
 concat-export = { path = "crates/concat-export" }
 concat-host = { path = "crates/concat-host" }
+concat-bundle = { path = "crates/concat-bundle" }
 concat-api = { path = "crates/concat-api" }
 concat-server = { path = "crates/concat-server" }
 concat-mcp = { path = "crates/concat-mcp" }

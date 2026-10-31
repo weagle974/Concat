@@ -50,6 +50,12 @@ pub enum StartMsg {
     ForgetRecent(String),
     /// Show a project's folder in the file manager.
     RevealRecent(String),
+    /// Pack a project of the grid into one file, to keep or to move.
+    ExportRecent(String),
+    /// Ask for a project file to open.
+    ImportProject,
+    /// The project file the picker answered with, or one dropped here.
+    ImportFrom(PathBuf),
     /// What the projects' search field holds now.
     SearchEdited(String),
     /// How the projects are ordered: [`SORT_RECENT`] or [`SORT_NAME`].
@@ -336,6 +342,11 @@ impl StartPane {
                     studio.notify(&error, true);
                 }
             }
+            StartMsg::ExportRecent(path) => crate::panes::bundle::export_recent(studio, path),
+            StartMsg::ImportProject => crate::panes::bundle::pick(),
+            StartMsg::ImportFrom(path) => {
+                crate::panes::bundle::import(studio, path, self.location.clone());
+            }
             StartMsg::SearchEdited(query) => self.query = query,
             StartMsg::Sort(sort) => {
                 self.sort = if sort == SORT_NAME {
@@ -377,6 +388,17 @@ impl StartPane {
             self.dropped.clear();
             self.composing = false;
             Self::open_chosen(folder, studio);
+            return;
+        }
+        // A project file dropped here opens as a project, not as media.
+        if let Some(file) = paths
+            .iter()
+            .find(|path| crate::panes::bundle::looks_like_project_file(path))
+            && concat_bundle::peek(file).is_ok()
+        {
+            self.dropped.clear();
+            self.composing = false;
+            crate::panes::bundle::import(studio, file.clone(), self.location.clone());
             return;
         }
         let media: Vec<PathBuf> = paths.into_iter().filter(|path| path.is_file()).collect();

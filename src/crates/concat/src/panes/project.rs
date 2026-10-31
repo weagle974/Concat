@@ -27,6 +27,8 @@ pub enum ProjectMsg {
     ColorSpaceChanged(i32),
     /// What shows where no picture covers the frame, `[r, g, b, a]` (#456).
     CanvasChanged([u8; 4]),
+    /// Pack the project and every file it uses into one file.
+    ExportFile,
     Apply,
 }
 
@@ -111,6 +113,15 @@ impl ProjectPane {
                     COLOR_SPACES[(index.max(0) as usize).min(COLOR_SPACES.len() - 1)];
             }
             ProjectMsg::CanvasChanged(canvas) => self.canvas = canvas,
+            ProjectMsg::ExportFile => {
+                // The edit as it stands, not as it was last written:
+                // nothing the person just did is left out.
+                if let Some(session) = studio.session.as_mut() {
+                    let (folder, document) = session.prepare_save(None);
+                    self.open = false;
+                    crate::panes::bundle::export(studio, folder, document);
+                }
+            }
             ProjectMsg::Apply => self.apply(studio),
         }
     }

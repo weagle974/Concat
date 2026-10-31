@@ -253,7 +253,10 @@ component PlainInput inherits Rectangle {
         accepted => { root.accepted(); }
     }
 
-    if root.draft == "": Text {
+    // Not while the keyboard holds a word it has not handed over yet: that
+    // word is in `preedit-text`, not in `draft`, so with `draft` alone the
+    // hint was drawn under the typed letters until the word was committed.
+    if root.draft == "" && input.preedit-text == "": Text {
         x: 0;
         y: (parent.height - self.height) / 2;
         width: parent.width;
@@ -1081,6 +1084,8 @@ component ProjectRow inherits Pressable {
 
     callback opened();
     callback forgotten();
+    /// Pack the project into one file, to keep or to move.
+    callback exported();
 
     label: root.project.name;
     radius: Theme.r;
@@ -1156,6 +1161,25 @@ component ProjectRow inherits Pressable {
                 color: Theme.fg-dim;
                 font-size: Theme.fs-sm;
                 overflow: elide;
+            }
+        }
+
+        // The project as one file. A project that cannot be found has
+        // nothing to pack.
+        if !root.project.missing: Rectangle {
+            width: 44px;
+
+            Icon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                glyph: Glyph.export;
+                size: 16px;
+                tint: pack.pressed || pack.has-hover ? Theme.fg : Theme.fg-dim;
+            }
+
+            pack := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.exported(); }
             }
         }
 
@@ -1235,7 +1259,7 @@ component SearchField inherits Rectangle {
         edited => { root.edited(self.text); }
     }
 
-    if root.draft == "": Text {
+    if root.draft == "" && input.preedit-text == "": Text {
         x: 34px;
         y: (parent.height - self.height) / 2;
         width: parent.width - 34px - 12px;
@@ -1884,6 +1908,9 @@ component NarrowHome inherits Rectangle {
     callback open-settings();
     callback open-recent(path: string);
     callback forget-recent(path: string);
+    callback export-recent(path: string);
+    /// Ask for a project file made by Export project file.
+    callback import-project();
     callback search-edited(query: string);
     callback link(name: string);
 
@@ -1968,6 +1995,18 @@ component NarrowHome inherits Rectangle {
                 clicked => { root.compose(); }
             }
 
+            // A project made on another phone, or kept before a reinstall.
+            Rectangle { height: 10px; }
+
+            CreateTile {
+                height: 60px;
+                glyph: Glyph.import;
+                title: I18n.t("start.openProjectFile");
+                note: I18n.t("start.openProjectFileNote");
+                enabled: !root.busy;
+                clicked => { root.import-project(); }
+            }
+
             Rectangle { height: 32px; }
 
             SectionHead {
@@ -2003,6 +2042,7 @@ component NarrowHome inherits Rectangle {
                 enabled: !root.busy;
                 opened => { root.open-recent(project.path); }
                 forgotten => { root.forget-recent(project.path); }
+                exported => { root.export-recent(project.path); }
             }
 
             Rectangle { height: 32px; }
@@ -2078,6 +2118,8 @@ export component StartScreen inherits Rectangle {
     callback open-recent(path: string);
     callback forget-recent(path: string);
     callback reveal-recent(path: string);
+    callback export-recent(path: string);
+    callback import-project();
     callback open-settings();
     callback search-edited(query: string);
     callback sort-changed(sort: int);
@@ -2123,6 +2165,8 @@ export component StartScreen inherits Rectangle {
         open-settings => { root.open-settings(); }
         open-recent(path) => { root.open-recent(path); }
         forget-recent(path) => { root.forget-recent(path); }
+        export-recent(path) => { root.export-recent(path); }
+        import-project => { root.import-project(); }
         search-edited(query) => { root.search-edited(query); }
         link(name) => { root.link(name); }
     }

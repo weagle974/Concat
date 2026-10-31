@@ -146,6 +146,8 @@ concat-media.workspace = true
 concat-project.workspace = true
 concat-export.workspace = true
 concat-host = { workspace = true, features = ["gpu"] }
+# A project as one file, to move or to survive a reinstall.
+concat-bundle.workspace = true
 concat-speech = { workspace = true, features = ["chatterbox"] }
 # The Settings sheet's Automation page: the Concat API on a socket while the
 # window is open. JSON-RPC only; the gRPC feature stays with concat-cli.

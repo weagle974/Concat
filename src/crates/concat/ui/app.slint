@@ -275,6 +275,10 @@ export component App inherits Window {
     callback start-open-recent(path: string);
     callback start-forget-recent(path: string);
     callback start-reveal-recent(path: string);
+    /// Pack a project of the list into one file.
+    callback start-export-recent(path: string);
+    /// Ask for a project file to open.
+    callback start-import-project();
     callback start-search-edited(query: string);
     callback start-sort-changed(sort: int);
     /// One of the launch screen's links, by name; see `start::link`.
@@ -422,6 +426,7 @@ export component App inherits Window {
     callback project-color-space-changed(index: int);
     callback project-canvas-changed(value: color);
     callback project-apply();
+    callback project-export-file();
 
     /// The two speech sheets: captions from a clip's sound, and a title's
     /// words - or any words - read aloud. Their option lists come from what
@@ -761,6 +766,8 @@ export component App inherits Window {
                 open-recent(path) => { root.start-open-recent(path); }
                 forget-recent(path) => { root.start-forget-recent(path); }
                 reveal-recent(path) => { root.start-reveal-recent(path); }
+                export-recent(path) => { root.start-export-recent(path); }
+                import-project => { root.start-import-project(); }
                 search-edited(query) => { root.start-search-edited(query); }
                 sort-changed(sort) => { root.start-sort-changed(sort); }
                 link(name) => { root.start-link(name); }
@@ -1069,6 +1076,7 @@ export component App inherits Window {
         color-space-changed(index) => { root.project-color-space-changed(index); }
         canvas-changed(value) => { root.project-canvas-changed(value); }
         apply => { root.project-apply(); }
+        export-file => { root.project-export-file(); }
     }
 
     // Over the Audio page it was opened from, and over the tool cards,

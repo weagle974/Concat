@@ -754,6 +754,12 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     app.on_start_reveal_recent(on_window!(|state, path: SharedString| {
         state.handle(Msg::Start(StartMsg::RevealRecent(path.to_string())));
     }));
+    app.on_start_export_recent(on_window!(|state, path: SharedString| {
+        state.handle(Msg::Start(StartMsg::ExportRecent(path.to_string())));
+    }));
+    app.on_start_import_project(on_window!(|state| {
+        state.handle(Msg::Start(StartMsg::ImportProject));
+    }));
     app.on_start_search_edited(on_window!(|state, query: SharedString| {
         state.handle(Msg::Start(StartMsg::SearchEdited(query.to_string())));
     }));
@@ -1886,6 +1892,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     }));
     app.on_project_apply(on_window!(|state| {
         state.handle(Msg::Project(ProjectMsg::Apply));
+    }));
+    app.on_project_export_file(on_window!(|state| {
+        state.handle(Msg::Project(ProjectMsg::ExportFile));
     }));
 
     app.on_confirm_accepted(on_window!(|state| {

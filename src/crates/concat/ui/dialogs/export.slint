@@ -82,6 +82,12 @@ export struct ExportData {
     hdr-experimental: bool,
     /// What the phone's encoder answered when asked, in its own words.
     hdr-experimental-note: string,
+    /// A phone can write its encoder report: what its video encoders are
+    /// and how they want their frames.
+    report-offered: bool,
+    /// The report, or the line saying it is being written.
+    report: string,
+    report-busy: bool,
     /// "HDR (HLG)" or "HDR (PQ)": the timeline's own.
     hdr-label: string,
     /// The bitrate the file is written at, in Mbps.
@@ -312,6 +318,7 @@ component OutputSection inherits DialogSection {
     callback codec-changed(index: int);
     callback ten-bit-changed(on: bool);
     callback hdr-experimental-changed(on: bool);
+    callback encoder-report();
     callback hdr-changed(on: bool);
 
     title: I18n.t("export.output");
@@ -388,6 +395,27 @@ component OutputSection inherits DialogSection {
         text: root.data.hdr-experimental-note != "" ? root.data.hdr-experimental-note : I18n.t("export.experimentalHdrHint");
         color: Theme.fg-dim;
         font-size: Theme.fs-sm;
+        wrap: word-wrap;
+    }
+
+    // What this phone's encoders are and how they want their frames: read
+    // only, shown here and saved beside the exports, to be sent from there.
+    if root.data.report-offered: DialogRow {
+        label: I18n.t("export.encoderReport");
+        HorizontalLayout {
+            alignment: end;
+            Button {
+                label: I18n.t("export.encoderReportRun");
+                enabled: !root.data.report-busy;
+                clicked => { root.encoder-report(); }
+            }
+        }
+    }
+    if root.data.report-offered && root.data.report != "": Text {
+        text: root.data.report;
+        color: Theme.fg-dim;
+        font-family: Theme.font-technical;
+        font-size: Theme.fs-xs;
         wrap: word-wrap;
     }
 
@@ -653,6 +681,7 @@ export component ExportDialog inherits Rectangle {
     callback codec-changed(index: int);
     callback ten-bit-changed(on: bool);
     callback hdr-experimental-changed(on: bool);
+    callback encoder-report();
     callback hdr-changed(on: bool);
     callback bitrate-changed(mbps: float);
     callback begin();
@@ -791,6 +820,7 @@ export component ExportDialog inherits Rectangle {
                             codec-changed(index) => { root.codec-changed(index); }
                             ten-bit-changed(on) => { root.ten-bit-changed(on); }
                             hdr-experimental-changed(on) => { root.hdr-experimental-changed(on); }
+                            encoder-report => { root.encoder-report(); }
                             hdr-changed(on) => { root.hdr-changed(on); }
                         }
                     }
@@ -832,6 +862,7 @@ export component ExportDialog inherits Rectangle {
                                 codec-changed(index) => { root.codec-changed(index); }
                                 ten-bit-changed(on) => { root.ten-bit-changed(on); }
                                 hdr-experimental-changed(on) => { root.hdr-experimental-changed(on); }
+                                encoder-report => { root.encoder-report(); }
                                 hdr-changed(on) => { root.hdr-changed(on); }
                             }
                         }
@@ -868,6 +899,7 @@ export component ExportDialog inherits Rectangle {
                                 codec-changed(index) => { root.codec-changed(index); }
                                 ten-bit-changed(on) => { root.ten-bit-changed(on); }
                                 hdr-experimental-changed(on) => { root.hdr-experimental-changed(on); }
+                                encoder-report => { root.encoder-report(); }
                                 hdr-changed(on) => { root.hdr-changed(on); }
                             }
                         }

@@ -12,6 +12,10 @@ import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -203,6 +207,144 @@ public class ConcatFiles extends Fragment {
         } catch (RuntimeException e) {
             Log.w(TAG, "could not open " + url, e);
             return String.valueOf(e.getMessage());
+        }
+    }
+
+    /**
+     * What this phone's video encoders are and how they want their frames:
+     * a plain-text report, read only. It names the phone and its chip, lists
+     * every H.264 and HEVC encoder with the input formats it takes, and for
+     * each hardware one configures a codec (and releases it at once, never
+     * starting it) to read back the input layout it asks for - the row
+     * stride and slice height a ByteBuffer frame has to be written with.
+     * Nothing is written to the phone and no setting is touched.
+     */
+    public static String encoderReport() {
+        StringBuilder out = new StringBuilder();
+        try {
+            report(out);
+        } catch (Throwable t) {
+            out.append("\nreport stopped: ").append(t).append('\n');
+        }
+        return out.toString();
+    }
+
+    private static void report(StringBuilder out) {
+        out.append("phone: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                .append(" (").append(Build.DEVICE).append(")\n");
+        out.append("android: ").append(Build.VERSION.RELEASE).append(", API ")
+                .append(Build.VERSION.SDK_INT).append('\n');
+        out.append("board: ").append(Build.BOARD).append(" / ").append(Build.HARDWARE).append('\n');
+        if (Build.VERSION.SDK_INT >= 31) {
+            out.append("chip: ").append(Build.SOC_MANUFACTURER).append(' ')
+                    .append(Build.SOC_MODEL).append('\n');
+        }
+        MediaCodecInfo[] infos = new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos();
+        for (MediaCodecInfo info : infos) {
+            if (!info.isEncoder()) {
+                continue;
+            }
+            for (String type : info.getSupportedTypes()) {
+                if (type.equals("video/avc") || type.equals("video/hevc")) {
+                    try {
+                        describe(out, info, type);
+                    } catch (Throwable t) {
+                        out.append("  could not read: ").append(t).append('\n');
+                    }
+                }
+            }
+        }
+    }
+
+    private static void describe(StringBuilder out, MediaCodecInfo info, String type) {
+        MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType(type);
+        boolean hardware = true;
+        if (Build.VERSION.SDK_INT >= 29) {
+            hardware = info.isHardwareAccelerated() && !info.isSoftwareOnly();
+        }
+        out.append('\n').append(info.getName()).append("  ").append(type)
+                .append(hardware ? "  HARDWARE" : "  software").append('\n');
+        out.append("  takes:");
+        boolean nv12 = false;
+        boolean p010 = false;
+        for (int format : caps.colorFormats) {
+            out.append(' ').append(colorName(format));
+            nv12 |= format == 21;
+            p010 |= format == 54;
+        }
+        out.append('\n');
+        if (type.equals("video/hevc")) {
+            boolean main10 = false;
+            boolean hdr10 = false;
+            for (MediaCodecInfo.CodecProfileLevel level : caps.profileLevels) {
+                main10 |= level.profile == 2;
+                hdr10 |= level.profile == 4096;
+            }
+            out.append("  hevc profiles: Main10 ").append(main10)
+                    .append(", Main10 HDR10 ").append(hdr10).append('\n');
+        }
+        MediaCodecInfo.VideoCapabilities video = caps.getVideoCapabilities();
+        if (video != null) {
+            out.append("  size alignment ").append(video.getWidthAlignment()).append(" x ")
+                    .append(video.getHeightAlignment()).append(", 1080x1920 at 60 fps: ")
+                    .append(video.areSizeAndRateSupported(1080, 1920, 60.0)).append('\n');
+        }
+        // Only the encoders that do real work are configured.
+        if (!hardware) {
+            return;
+        }
+        int[][] sizes = {{1088, 1920}, {1080, 1920}};
+        for (int[] size : sizes) {
+            if (nv12) {
+                layout(out, info.getName(), type, size[0], size[1], 21);
+            }
+            if (p010) {
+                layout(out, info.getName(), type, size[0], size[1], 54);
+            }
+        }
+    }
+
+    /** Configures the codec for one input format, reads what it asks for, releases it. */
+    private static void layout(
+            StringBuilder out, String name, String type, int width, int height, int format) {
+        MediaCodec codec = null;
+        try {
+            MediaFormat wanted = MediaFormat.createVideoFormat(type, width, height);
+            wanted.setInteger(MediaFormat.KEY_COLOR_FORMAT, format);
+            wanted.setInteger(MediaFormat.KEY_BIT_RATE, 9000000);
+            wanted.setInteger(MediaFormat.KEY_FRAME_RATE, 60);
+            wanted.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+            if (format == 54 && type.equals("video/hevc")) {
+                wanted.setInteger(MediaFormat.KEY_PROFILE, 2);
+            }
+            codec = MediaCodec.createByCodecName(name);
+            codec.configure(wanted, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            out.append("  ").append(width).append('x').append(height).append(' ')
+                    .append(colorName(format)).append(" input: ")
+                    .append(codec.getInputFormat()).append('\n');
+        } catch (Throwable t) {
+            out.append("  ").append(width).append('x').append(height).append(' ')
+                    .append(colorName(format)).append(" refused: ").append(t).append('\n');
+        } finally {
+            if (codec != null) {
+                try {
+                    codec.release();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
+    private static String colorName(int format) {
+        switch (format) {
+            case 19: return "I420";
+            case 20: return "I420-packed";
+            case 21: return "NV12";
+            case 39: return "NV12-packed";
+            case 54: return "P010";
+            case 0x7F000789: return "Surface";
+            case 0x7F420888: return "Flexible";
+            default: return "0x" + Integer.toHexString(format);
         }
     }
 

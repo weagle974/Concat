@@ -867,6 +867,48 @@ pub fn install_export_publisher(publisher: ExportPublisher) {
     let _ = EXPORT_PUBLISHER.set(publisher);
 }
 
+/// What a phone answers to "which video encoders do you have, and how do
+/// they want their frames": a plain-text report, read only. Installed by
+/// the phone's own crate; see [`install_encoder_report`].
+#[cfg(target_os = "android")]
+pub type EncoderReport = Box<dyn Fn() -> String + Send + Sync>;
+
+#[cfg(target_os = "android")]
+static ENCODER_REPORT: std::sync::OnceLock<EncoderReport> = std::sync::OnceLock::new();
+
+/// Installs how a phone is asked for its encoder report. Once; a second
+/// call is ignored.
+#[cfg(target_os = "android")]
+pub fn install_encoder_report(report: EncoderReport) {
+    let _ = ENCODER_REPORT.set(report);
+}
+
+/// Whether this device can write an encoder report.
+pub fn encoder_report_offered() -> bool {
+    #[cfg(target_os = "android")]
+    {
+        ENCODER_REPORT.get().is_some()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        false
+    }
+}
+
+/// The encoder report, which configures each hardware encoder in turn and
+/// so takes a moment: called off the window's thread. None where there is
+/// none to be had.
+pub fn encoder_report() -> Option<String> {
+    #[cfg(target_os = "android")]
+    {
+        ENCODER_REPORT.get().map(|report| report())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        None
+    }
+}
+
 /// Whether the app may record from the microphone, asking when it has not
 /// been told: on a phone, false puts the system's question up and comes
 /// back at once, and the answer is read the next time this is asked.

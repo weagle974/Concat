@@ -365,6 +365,7 @@ export component App inherits Window {
     callback export-codec-changed(index: int);
     callback export-ten-bit-changed(on: bool);
     callback export-hdr-experimental-changed(on: bool);
+    callback export-encoder-report();
     callback export-hdr-changed(on: bool);
     callback export-bitrate-changed(mbps: float);
     callback export-start();
@@ -980,6 +981,7 @@ export component App inherits Window {
         codec-changed(index) => { root.export-codec-changed(index); }
         ten-bit-changed(on) => { root.export-ten-bit-changed(on); }
         hdr-experimental-changed(on) => { root.export-hdr-experimental-changed(on); }
+        encoder-report => { root.export-encoder-report(); }
         hdr-changed(on) => { root.export-hdr-changed(on); }
         bitrate-changed(mbps) => { root.export-bitrate-changed(mbps); }
         begin => { root.export-start(); }

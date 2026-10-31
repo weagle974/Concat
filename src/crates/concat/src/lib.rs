@@ -55,6 +55,8 @@ pub use platform::{
     ExportPublisher, FilePicker, PickKinds, install_export_publisher, install_file_picker,
 };
 #[cfg(target_os = "android")]
+pub use platform::{EncoderReport, install_encoder_report};
+#[cfg(target_os = "android")]
 pub use platform::{LinkOpener, install_link_opener};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub use platform::{MicrophoneAccess, install_microphone_access};
@@ -2038,6 +2040,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     }));
     app.on_export_ten_bit_changed(on_window!(|state, on: bool| {
         state.handle(Msg::Export(ExportMsg::TenBitChanged(on)));
+    }));
+    app.on_export_encoder_report(on_window!(|state| {
+        state.handle(Msg::Export(ExportMsg::EncoderReport));
     }));
     app.on_export_hdr_experimental_changed(on_window!(|state, on: bool| {
         state.handle(Msg::Export(ExportMsg::ExperimentalHdrChanged(on)));

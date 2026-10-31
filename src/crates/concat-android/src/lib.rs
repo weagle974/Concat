@@ -437,6 +437,39 @@ mod publisher {
     }
 }
 
+/// What this phone's video encoders are and how they want their frames, for
+/// the export sheet's Encoder report: read only, asked of the media codec
+/// list and never written anywhere.
+#[cfg(target_os = "android")]
+mod encoders {
+    use jni::objects::JString;
+    use jni::{jni_sig, jni_str};
+    use slint::android::AndroidApp;
+
+    /// Hands the window's crate the way to the report.
+    pub fn install(app: &AndroidApp) {
+        let app = app.clone();
+        concat::install_encoder_report(Box::new(move || report(&app)));
+    }
+
+    /// `ConcatFiles.encoderReport`: the report, or why there is none.
+    fn report(app: &AndroidApp) -> String {
+        let answer = super::java::with_class(app, |env, _activity, class| {
+            let answer = env
+                .call_static_method(
+                    class,
+                    jni_str!("encoderReport"),
+                    jni_sig!("()Ljava/lang/String;"),
+                    &[],
+                )?
+                .l()?;
+            let answer = env.cast_local::<JString>(answer)?;
+            Ok(answer.mutf8_chars(env)?.to_string())
+        });
+        answer.unwrap_or_else(|error| format!("the report could not be asked for: {error}"))
+    }
+}
+
 /// The microphone, for a voiceover.
 ///
 /// Android grants it while the app runs, not at install, and an input
@@ -525,6 +558,7 @@ fn android_main(app: slint::android::AndroidApp) {
     publisher::install(&app);
     microphone::install(&app);
     links::install(&app);
+    encoders::install(&app);
     if let Err(error) = concat::run() {
         log::error!("{error}");
     }

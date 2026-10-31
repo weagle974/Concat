@@ -38,6 +38,10 @@ pub enum ExportMsg {
     TenBitChanged(bool),
     /// Experimental, a phone's HEVC encoder asked for ten bits.
     ExperimentalHdrChanged(bool),
+    /// The phone's encoder report: asked for, then shown and saved.
+    EncoderReport,
+    /// The report, once the phone has written it.
+    EncoderReportReady(String),
     /// For an HDR timeline: written HDR (true), or tone-mapped to SDR.
     HdrChanged(bool),
     /// The target bitrate field, in Mbps: the bitrate becomes a custom one.
@@ -88,6 +92,11 @@ pub struct ExportPane {
     pub experimental_hdr: bool,
     /// What that encoder answered when asked, to show under the switch.
     pub experimental_note: String,
+    /// The phone's encoder report, once asked for; shown at the foot of the
+    /// output section.
+    pub report: String,
+    /// The report is being written.
+    pub report_busy: bool,
     /// The typed bitrate in kbps, the one written when `custom`.
     pub bitrate: u32,
     pub phase: ExportPhase,
@@ -121,6 +130,8 @@ impl Default for ExportPane {
             sdr: false,
             experimental_hdr: false,
             experimental_note: String::new(),
+            report: String::new(),
+            report_busy: false,
             bitrate: 8000,
             phase: ExportPhase::Idle,
             progress: 0.0,
@@ -181,6 +192,49 @@ impl ExportPane {
                             self.experimental_note = format!("Refused, left off. {why}");
                         }
                     }
+                }
+            }
+            // Configuring each hardware encoder takes a moment, so it runs
+            // on a worker; the text comes back as `EncoderReportReady`.
+            ExportMsg::EncoderReport => {
+                if self.report_busy {
+                    return;
+                }
+                self.report_busy = true;
+                self.report = t("export.encoderReportWorking");
+                spawn(crate::platform::encoder_report, |studio, _, _, report| {
+                    studio.handle(Msg::Export(ExportMsg::EncoderReportReady(
+                        report.unwrap_or_default(),
+                    )));
+                });
+            }
+            ExportMsg::EncoderReportReady(report) => {
+                self.report_busy = false;
+                self.report = report.clone();
+                if report.is_empty() {
+                    return;
+                }
+                // Also written where the phone's file manager shows it, to
+                // be sent from there.
+                let _ = std::fs::create_dir_all(&self.folder);
+                let file = std::path::Path::new(&self.folder).join("concat-encoder-report.txt");
+                if std::fs::write(&file, &report).is_ok() {
+                    let written = file.clone();
+                    let handed =
+                        crate::platform::publish_document(file, "text/plain", move |result| {
+                            crate::host::on_ui(move |studio, _, _| match result {
+                                Ok(place) => {
+                                    studio.notify(&tf("export.reportSaved", &[&place]), false)
+                                }
+                                Err(error) => {
+                                    log::warn!(
+                                        "export: could not publish {}: {error}",
+                                        written.display()
+                                    );
+                                }
+                            });
+                        });
+                    let _ = handed;
                 }
             }
             ExportMsg::HdrChanged(on) => self.sdr = !on,
@@ -415,7 +469,9 @@ impl ExportPane {
         } else {
             None
         };
-        if let Some(index) = wanted.and_then(|codec| VideoCodec::ALL.iter().position(|c| *c == codec)) {
+        if let Some(index) =
+            wanted.and_then(|codec| VideoCodec::ALL.iter().position(|c| *c == codec))
+        {
             self.codec = index;
         }
     }
@@ -725,6 +781,9 @@ impl ExportPane {
                 && concat_media::VideoCodec::Hevc.encodable(),
             hdr_experimental: self.experimental_hdr,
             hdr_experimental_note: self.experimental_note.as_str().into(),
+            report_offered: crate::platform::encoder_report_offered(),
+            report: self.report.as_str().into(),
+            report_busy: self.report_busy,
             hdr: self.hdr(studio),
             // The codecs HDR and the ten-bit switch are written in: H.264,
             // HEVC, AV1. ProRes 4444 is ten bits on every platform, and its

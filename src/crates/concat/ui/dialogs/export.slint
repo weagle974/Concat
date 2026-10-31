@@ -75,6 +75,13 @@ export struct ExportData {
     /// This platform can write ten bits at all. A phone's hardware
     /// encoders take eight, so neither the switch nor HDR is offered there.
     deep-available: bool,
+    /// A phone with an HDR timeline, whose hardware encoders are fed eight
+    /// bits: the switch that asks its HEVC encoder for ten, experimental.
+    hdr-experimental-offered: bool,
+    /// The switch is on. Off at every start of the app.
+    hdr-experimental: bool,
+    /// What the phone's encoder answered when asked, in its own words.
+    hdr-experimental-note: string,
     /// "HDR (HLG)" or "HDR (PQ)": the timeline's own.
     hdr-label: string,
     /// The bitrate the file is written at, in Mbps.
@@ -304,6 +311,7 @@ component OutputSection inherits DialogSection {
     callback bitrate-changed(mbps: float);
     callback codec-changed(index: int);
     callback ten-bit-changed(on: bool);
+    callback hdr-experimental-changed(on: bool);
     callback hdr-changed(on: bool);
 
     title: I18n.t("export.output");
@@ -345,6 +353,29 @@ component OutputSection inherits DialogSection {
             details: [I18n.t("export.asTheTimeline"), I18n.t("export.toneMapped")];
             changed(index) => { root.hdr-changed(index == 0); }
         }
+    }
+
+    // Experimental, and off every time the app opens: ten-bit HEVC asked of
+    // a phone's own encoder, which this app has not seen take it. The
+    // answer is shown under the switch; an export it cannot do says why.
+    if root.data.hdr-experimental-offered: DialogRow {
+        label: I18n.t("export.experimentalHdr");
+        HorizontalLayout {
+            alignment: end;
+            VerticalLayout {
+                alignment: center;
+                Switch {
+                    checked: root.data.hdr-experimental;
+                    toggled(on) => { root.hdr-experimental-changed(on); }
+                }
+            }
+        }
+    }
+    if root.data.hdr-experimental-offered: Text {
+        text: root.data.hdr-experimental-note != "" ? root.data.hdr-experimental-note : I18n.t("export.experimentalHdrHint");
+        color: Theme.fg-dim;
+        font-size: Theme.fs-sm;
+        wrap: word-wrap;
     }
 
     // The standard, not the encoder: which encoder makes it is the
@@ -608,6 +639,7 @@ export component ExportDialog inherits Rectangle {
     callback rate-changed(index: int);
     callback codec-changed(index: int);
     callback ten-bit-changed(on: bool);
+    callback hdr-experimental-changed(on: bool);
     callback hdr-changed(on: bool);
     callback bitrate-changed(mbps: float);
     callback begin();
@@ -745,6 +777,7 @@ export component ExportDialog inherits Rectangle {
                             rate-changed(index) => { root.rate-changed(index); }
                             codec-changed(index) => { root.codec-changed(index); }
                             ten-bit-changed(on) => { root.ten-bit-changed(on); }
+                            hdr-experimental-changed(on) => { root.hdr-experimental-changed(on); }
                             hdr-changed(on) => { root.hdr-changed(on); }
                         }
                     }
@@ -785,6 +818,7 @@ export component ExportDialog inherits Rectangle {
                                 rate-changed(index) => { root.rate-changed(index); }
                                 codec-changed(index) => { root.codec-changed(index); }
                                 ten-bit-changed(on) => { root.ten-bit-changed(on); }
+                                hdr-experimental-changed(on) => { root.hdr-experimental-changed(on); }
                                 hdr-changed(on) => { root.hdr-changed(on); }
                             }
                         }
@@ -820,6 +854,7 @@ export component ExportDialog inherits Rectangle {
                                 rate-changed(index) => { root.rate-changed(index); }
                                 codec-changed(index) => { root.codec-changed(index); }
                                 ten-bit-changed(on) => { root.ten-bit-changed(on); }
+                                hdr-experimental-changed(on) => { root.hdr-experimental-changed(on); }
                                 hdr-changed(on) => { root.hdr-changed(on); }
                             }
                         }

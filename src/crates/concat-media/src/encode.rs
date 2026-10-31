@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use concat_core::frame::{Depth, Frame, Signal};
 use concat_core::time::FrameRate;
@@ -670,7 +671,67 @@ fn takes_ten_bits(encoder_name: &str) -> bool {
         Family::Nvenc | Family::Qsv => {
             encoder_name.starts_with("hevc_") || encoder_name.starts_with("av1_")
         }
-        Family::MediaCodec | Family::MediaFoundation => false,
+        // A phone's HEVC chip takes ten bits only when asked to, for this
+        // run of the app (see `VideoCodec::allow_experimental_ten_bit`).
+        Family::MediaCodec => {
+            encoder_name.starts_with("hevc_") && EXPERIMENTAL_TEN_BIT.load(Ordering::Relaxed)
+        }
+        Family::MediaFoundation => false,
+    }
+}
+
+/// Whether ten-bit HEVC is asked of a phone's MediaCodec encoder. Off at
+/// every start: it lives in memory only, and nothing is saved to the phone.
+static EXPERIMENTAL_TEN_BIT: AtomicBool = AtomicBool::new(false);
+
+impl VideoCodec {
+    /// Lets a phone's MediaCodec HEVC encoder be asked for ten-bit pictures,
+    /// which FFmpeg's wrapper has not been shown to take: experimental, so
+    /// off until the person turns it on, and for this run of the app only.
+    /// Where the encoder refuses, the export says why instead of writing
+    /// eight bits and calling them HDR.
+    pub fn allow_experimental_ten_bit(on: bool) {
+        EXPERIMENTAL_TEN_BIT.store(on, Ordering::Relaxed);
+    }
+
+    /// Asks every linked ten-bit encoder of this codec to open for an HLG
+    /// file, writing nothing: the encoder that did, or what the last one
+    /// said when none would. A phone's chip answers only by being asked.
+    pub fn probe_ten_bit(self) -> std::result::Result<&'static str, String> {
+        ffi::init();
+        let options = EncodeOptions {
+            codec: self,
+            ten_bit: true,
+            ..EncodeOptions::default()
+        };
+        let tags = (
+            ffmpeg::color::Primaries::BT2020,
+            ffmpeg::color::TransferCharacteristic::ARIB_STD_B67,
+            ffmpeg::color::Space::BT2020NCL,
+        );
+        let mut said = format!("no linked {} encoder takes ten bits", self.label());
+        for name in self.linked(true, true) {
+            let Some(found) = encoder::find_by_name(name) else {
+                continue;
+            };
+            // Nothing is written: the path only names the file in an error.
+            match open_video(
+                name,
+                found,
+                Path::new("probe.mp4"),
+                (1280, 720),
+                ffmpeg::Rational::new(30, 1),
+                &options,
+                tags,
+                Some(Signal::Hlg),
+                true,
+                Attempt::AsAsked,
+            ) {
+                Ok(_) => return Ok(name),
+                Err(error) => said = format!("{name}: {error}"),
+            }
+        }
+        Err(said)
     }
 }
 
@@ -754,9 +815,14 @@ fn allowed_attempts(
     options: &EncodeOptions,
 ) -> impl Iterator<Item = Attempt> {
     let software_only = options.software_only;
+    // Ten bits are asked of the chip as asked or not at all: asked plainly
+    // it drops the colour keys, and Android's own HEVC component writes
+    // eight bits - either would give a file that is not the HDR it says.
+    let chip_at_ten_bits = options.ten_bit && Family::of(encoder_name) == Family::MediaCodec;
     attempts(encoder_name)
         .iter()
         .copied()
+        .filter(move |attempt| !chip_at_ten_bits || *attempt == Attempt::AsAsked)
         .filter(move |attempt| !software_only || attempt.in_software(encoder_name))
 }
 
@@ -1024,9 +1090,18 @@ fn open_video(
         // A phone's chip. The NDK's MediaCodec, not the Java one: no
         // JavaVM is handed to FFmpeg, and the NDK needs none.
         _ if family == Family::MediaCodec => match attempt {
-            Attempt::AsAsked => ffmpeg::dict! {
-                "bitrate_mode" => if cbr { "cbr" } else { "vbr" },
-            },
+            Attempt::AsAsked => {
+                let mut asked = ffmpeg::dict! {
+                    "bitrate_mode" => if cbr { "cbr" } else { "vbr" },
+                };
+                // Ten bits are HEVC's Main 10 profile. Its number, 2, not
+                // its name: a name the option table does not know fails
+                // the open, a number is read by any of them.
+                if options.ten_bit && encoder_name.starts_with("hevc_") {
+                    asked.set("profile", "2");
+                }
+                asked
+            }
             // The chip's own rate control, whatever it is.
             Attempt::Plain => ffmpeg::Dictionary::new(),
             Attempt::Component(component) => ffmpeg::dict! {

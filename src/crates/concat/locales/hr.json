@@ -236,6 +236,8 @@
   "export.couldNotPublish": "Nije moguće spremiti u {0}: {1}",
   "export.couldNotShowFile": "Nije moguće prikazati datoteku: {0}",
   "export.destination": "Odredište",
+  "export.experimentalHdr": "HDR 10-bit (experimental)",
+  "export.experimentalHdrHint": "Asks this phone's own HEVC encoder for 10-bit HDR. Off every time the app opens. If the phone refuses, it says why and nothing changes.",
   "export.exportAgain": "Izvezi ponovno",
   "export.exportEstimate": "Izvoz · ~",
   "export.exportFailed": "Izvoz nije uspio: {0}",

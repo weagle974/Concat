@@ -236,6 +236,8 @@
   "export.couldNotPublish": "ذخیره در {0} ممکن نبود: {1}",
   "export.couldNotShowFile": "نمایش فایل ممکن نشد: {0}",
   "export.destination": "مقصد",
+  "export.experimentalHdr": "HDR 10-bit (experimental)",
+  "export.experimentalHdrHint": "Asks this phone's own HEVC encoder for 10-bit HDR. Off every time the app opens. If the phone refuses, it says why and nothing changes.",
   "export.exportAgain": "خروجی گرفتن مجدد",
   "export.exportEstimate": "خروجی · ~",
   "export.exportFailed": "خروجی گرفتن ناموفق بود: {0}",

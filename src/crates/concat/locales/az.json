@@ -236,6 +236,8 @@
   "export.couldNotPublish": "{0} yerinə yadda saxlamaq alınmadı: {1}",
   "export.couldNotShowFile": "Faylı göstərmək alınmadı: {0}",
   "export.destination": "Hara",
+  "export.experimentalHdr": "HDR 10-bit (experimental)",
+  "export.experimentalHdrHint": "Asks this phone's own HEVC encoder for 10-bit HDR. Off every time the app opens. If the phone refuses, it says why and nothing changes.",
   "export.exportAgain": "Yenidən ixrac et",
   "export.exportEstimate": "İxrac · ~",
   "export.exportFailed": "İxrac alınmadı: {0}",

@@ -236,6 +236,8 @@
   "export.couldNotPublish": "Không thể lưu vào {0}: {1}",
   "export.couldNotShowFile": "Không thể hiển thị tệp: {0}",
   "export.destination": "Đích lưu",
+  "export.experimentalHdr": "HDR 10-bit (experimental)",
+  "export.experimentalHdrHint": "Asks this phone's own HEVC encoder for 10-bit HDR. Off every time the app opens. If the phone refuses, it says why and nothing changes.",
   "export.exportAgain": "Xuất lại",
   "export.exportEstimate": "Xuất · ~",
   "export.exportFailed": "Xuất thất bại: {0}",

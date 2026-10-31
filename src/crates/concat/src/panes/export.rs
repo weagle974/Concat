@@ -36,6 +36,8 @@ pub enum ExportMsg {
     RateChanged(i32),
     CodecChanged(i32),
     TenBitChanged(bool),
+    /// Experimental, a phone's HEVC encoder asked for ten bits.
+    ExperimentalHdrChanged(bool),
     /// For an HDR timeline: written HDR (true), or tone-mapped to SDR.
     HdrChanged(bool),
     /// The target bitrate field, in Mbps: the bitrate becomes a custom one.
@@ -81,6 +83,11 @@ pub struct ExportPane {
     pub ten_bit: bool,
     /// An HDR timeline written tone-mapped to SDR rather than as it is.
     pub sdr: bool,
+    /// The experimental switch: a phone's HEVC encoder asked for ten bits.
+    /// Never saved; off at every start of the app.
+    pub experimental_hdr: bool,
+    /// What that encoder answered when asked, to show under the switch.
+    pub experimental_note: String,
     /// The typed bitrate in kbps, the one written when `custom`.
     pub bitrate: u32,
     pub phase: ExportPhase,
@@ -112,6 +119,8 @@ impl Default for ExportPane {
             codec: 0,
             ten_bit: false,
             sdr: false,
+            experimental_hdr: false,
+            experimental_note: String::new(),
             bitrate: 8000,
             phase: ExportPhase::Idle,
             progress: 0.0,
@@ -154,6 +163,26 @@ impl ExportPane {
                 }
             }
             ExportMsg::TenBitChanged(on) => self.ten_bit = on,
+            // The encoder is asked at once, writing nothing, and the answer
+            // kept to show. A refusal puts the switch back off, so the
+            // sheet goes on as it was and the export is not one that fails.
+            ExportMsg::ExperimentalHdrChanged(on) => {
+                concat_media::VideoCodec::allow_experimental_ten_bit(on);
+                self.experimental_hdr = on;
+                self.experimental_note = String::new();
+                if on {
+                    match concat_media::VideoCodec::Hevc.probe_ten_bit() {
+                        Ok(name) => {
+                            self.experimental_note = format!("{name}: 10-bit HLG opens");
+                        }
+                        Err(why) => {
+                            concat_media::VideoCodec::allow_experimental_ten_bit(false);
+                            self.experimental_hdr = false;
+                            self.experimental_note = format!("Refused, left off. {why}");
+                        }
+                    }
+                }
+            }
             ExportMsg::HdrChanged(on) => self.sdr = !on,
             ExportMsg::BitrateChanged(mbps) => {
                 if mbps.is_finite() {
@@ -691,6 +720,11 @@ impl ExportPane {
             rate_controlled: self.codec(studio).rate_controlled(),
             ten_bit: self.ten_bit,
             hdr_timeline: studio.timeline().video.color_space.is_hdr(),
+            hdr_experimental_offered: cfg!(target_os = "android")
+                && studio.timeline().video.color_space.is_hdr()
+                && concat_media::VideoCodec::Hevc.encodable(),
+            hdr_experimental: self.experimental_hdr,
+            hdr_experimental_note: self.experimental_note.as_str().into(),
             hdr: self.hdr(studio),
             // The codecs HDR and the ten-bit switch are written in: H.264,
             // HEVC, AV1. ProRes 4444 is ten bits on every platform, and its

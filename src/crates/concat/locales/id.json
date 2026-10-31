@@ -236,6 +236,8 @@
   "export.couldNotPublish": "Tidak dapat menyimpan ke {0}: {1}",
   "export.couldNotShowFile": "Tidak dapat menampilkan file: {0}",
   "export.destination": "Tujuan",
+  "export.experimentalHdr": "HDR 10-bit (experimental)",
+  "export.experimentalHdrHint": "Asks this phone's own HEVC encoder for 10-bit HDR. Off every time the app opens. If the phone refuses, it says why and nothing changes.",
   "export.exportAgain": "Ekspor lagi",
   "export.exportEstimate": "Ekspor · ~",
   "export.exportFailed": "Ekspor gagal: {0}",

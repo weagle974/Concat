@@ -236,6 +236,8 @@
   "export.couldNotPublish": "บันทึกไปที่ {0} ไม่ได้: {1}",
   "export.couldNotShowFile": "แสดงไฟล์ไม่ได้: {0}",
   "export.destination": "ปลายทาง",
+  "export.experimentalHdr": "HDR 10-bit (experimental)",
+  "export.experimentalHdrHint": "Asks this phone's own HEVC encoder for 10-bit HDR. Off every time the app opens. If the phone refuses, it says why and nothing changes.",
   "export.exportAgain": "ส่งออกอีกครั้ง",
   "export.exportEstimate": "ส่งออก · ~",
   "export.exportFailed": "ส่งออกไม่สำเร็จ: {0}",

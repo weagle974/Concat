@@ -2030,6 +2030,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     app.on_export_ten_bit_changed(on_window!(|state, on: bool| {
         state.handle(Msg::Export(ExportMsg::TenBitChanged(on)));
     }));
+    app.on_export_hdr_experimental_changed(on_window!(|state, on: bool| {
+        state.handle(Msg::Export(ExportMsg::ExperimentalHdrChanged(on)));
+    }));
     app.on_export_bitrate_changed(on_window!(|state, mbps: f32| {
         state.handle(Msg::Export(ExportMsg::BitrateChanged(mbps)));
     }));

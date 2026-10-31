@@ -112,9 +112,10 @@ jobs:
           - target: aarch64-linux-android
             abi: arm64
             ship: true
-          - target: x86_64-linux-android
-            abi: x86_64
-            ship: false
+          # perso: the x86_64 build for CI's emulators, the emulator checks
+          # and the iPhone build are switched off. This fork installs the
+          # arm64 APK on a phone and nothing else, and each of them cost
+          # a build of their own.
     steps:
       # The ref release.yml names, which is its tag: without one a run
       # started by hand builds main and publishes it under the tag's name.
@@ -288,6 +289,7 @@ jobs:
   # tested at all.
   android-smoke:
     name: Android smoke (API ${{ matrix.api }})
+    if: false # perso: needs the x86_64 build, which is off above
     needs: android
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -349,6 +351,7 @@ jobs:
 
   ios:
     name: iOS arm64
+    if: false # perso: no iPhone
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -460,6 +463,7 @@ jobs:
   # build's environment is written out in the build step below.
   ios-simulator:
     name: iOS simulator smoke
+    if: false # perso: no iPhone
     runs-on: macos-15
     timeout-minutes: 90
     steps:
